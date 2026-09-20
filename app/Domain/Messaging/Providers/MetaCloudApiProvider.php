@@ -144,4 +144,30 @@ class MetaCloudApiProvider implements MessagingProviderInterface
         $fakeSandbox = new FakeWhatsAppSandboxProvider();
         return $fakeSandbox->parseWebhookPayload($payload);
     }
+
+    public function markAsRead(Channel $channel, string $providerMessageId): bool
+    {
+        $phoneNumberId = $channel->phone_number_id;
+        $token = $channel->secret_reference ?? config('services.meta.token');
+
+        if (empty($phoneNumberId) || empty($token) || empty($providerMessageId)) {
+            return false;
+        }
+
+        $endpoint = "https://graph.facebook.com/{$this->apiVersion}/{$phoneNumberId}/messages";
+
+        try {
+            $response = Http::withToken($token)->post($endpoint, [
+                'messaging_product' => 'whatsapp',
+                'status' => 'read',
+                'message_id' => $providerMessageId,
+            ]);
+
+            return $response->successful();
+        } catch (\Throwable $e) {
+            \Log::warning('Failed to mark message as read on Meta: ' . $e->getMessage());
+            return false;
+        }
+    }
 }
+

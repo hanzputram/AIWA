@@ -439,7 +439,7 @@
   display: flex !important;
   align-items: center !important;
   justify-content: center !important;
-  box-shadow: 0 0 15px var(--accent-blue-glow), var(--shadow-md) !important;
+  box-shadow: var(--shadow-md) !important;
   border: 2px solid rgba(255, 255, 255, 0.2) !important;
 }
 
@@ -449,12 +449,12 @@
 
 .marker-cluster-medium div {
   background: var(--accent-orange) !important;
-  box-shadow: 0 0 15px var(--accent-orange-glow), var(--shadow-md) !important;
+  box-shadow: var(--shadow-md) !important;
 }
 
 .marker-cluster-large div {
   background: var(--accent-red) !important;
-  box-shadow: 0 0 15px var(--accent-red-glow), var(--shadow-md) !important;
+  box-shadow: var(--shadow-md) !important;
 }
 
 /* Filter panel on map */

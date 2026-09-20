@@ -37,4 +37,9 @@ class QuoteLine extends Model
     {
         return $this->belongsTo(Product::class);
     }
+
+    public function quote(): \Illuminate\Database\Eloquent\Relations\HasOneThrough
+    {
+        return $this->hasOneThrough(Quote::class, QuoteRevision::class, 'id', 'id', 'quote_revision_id', 'quote_id');
+    }
 }

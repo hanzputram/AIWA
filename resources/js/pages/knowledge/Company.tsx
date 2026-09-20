@@ -1,6 +1,6 @@
 import React, { useState } from 'react';
 import AppLayout from '../../layouts/AppLayout';
-import { Head, useForm, router } from '@inertiajs/react';
+import { Head, useForm } from '@inertiajs/react';
 import {
     Building2,
     Upload,
@@ -11,6 +11,8 @@ import {
     FileCheck,
     ArrowRight,
     X,
+    ExternalLink,
+    Save,
 } from 'lucide-react';
 
 interface Props {
@@ -78,223 +80,258 @@ export default function Company({ profile, documents, recent_imports }: Props) {
     };
 
     return (
-        <AppLayout title="Company Profile (Compro) & Business Profile">
-            <Head title="Profil Perusahaan & Compro" />
+        <AppLayout title="Profil Perusahaan & Dokumen Compro">
+            <Head title="Profil Perusahaan — AIWA HQ" />
 
-            <div className="p-6 space-y-6 max-w-7xl mx-auto">
-                <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
-                    <div>
-                        <h2 className="text-lg font-bold text-white tracking-tight flex items-center gap-2">
-                            <Building2 className="w-5 h-5 text-indigo-400" />
-                            <span>Profil Bisnis & Dokumen Company Profile (Compro)</span>
-                        </h2>
-                        <p className="text-xs text-slate-400">
-                            Unggah dokumen compro untuk autofill profil secara otomatis dengan penelusuran sumber, serta buat PDF resmi versi approved untuk dibagikan ke WhatsApp pelanggan.
-                        </p>
+            <div className="p-6 md:p-8 space-y-6 max-w-[1600px] mx-auto">
+                <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 bg-white p-6 rounded-2xl border border-slate-200/80 shadow-xs">
+                    <div className="flex items-center gap-3">
+                        <div className="w-10 h-10 rounded-xl bg-blue-50 text-blue-600 flex items-center justify-center font-bold">
+                            <Building2 className="w-5 h-5" />
+                        </div>
+                        <div>
+                            <h1 className="text-base font-bold text-slate-900 tracking-tight">
+                                Profil Bisnis & Dokumen Company Profile (Compro)
+                            </h1>
+                            <p className="text-xs text-slate-500">
+                                Ekstraksi otomatis dokumen profil perusahaan dengan sitasi sumber untuk menjawab pertanyaan pelanggan via WhatsApp.
+                            </p>
+                        </div>
                     </div>
 
                     <button
                         onClick={() => setUploadModalOpen(true)}
-                        className="flex items-center gap-2 px-3.5 py-2 bg-indigo-600 hover:bg-indigo-500 text-white rounded-xl text-xs font-bold shadow-lg shadow-indigo-600/30 transition self-start sm:self-auto"
+                        className="flex items-center gap-2 px-4 py-2 bg-blue-600 text-white rounded-xl text-xs font-bold hover:bg-blue-700 transition shadow-xs"
                     >
                         <Upload className="w-4 h-4" />
-                        <span>Upload Compro (Autofill AI)</span>
+                        <span>Upload Compro PDF</span>
                     </button>
                 </div>
 
                 <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
-                    {/* Left 2 Cols: Structured Business Profile Form */}
-                    <div className="lg:col-span-2 bg-slate-900 border border-slate-800 rounded-2xl p-6 shadow-sm space-y-5">
-                        <div className="flex items-center justify-between pb-3 border-b border-slate-800">
+                    {/* Left 2 Cols: Form Profil Bisnis Approved */}
+                    <div className="lg:col-span-2 bg-white border border-slate-200/80 rounded-2xl p-6 shadow-xs space-y-5">
+                        <div className="flex items-center justify-between pb-3 border-b border-slate-100">
                             <div>
-                                <h3 className="font-bold text-sm text-white">Data Profil Perusahaan Terstruktur</h3>
-                                <p className="text-[11px] text-slate-400">Sumber: {profile.source_document_name || 'Input Manual'}</p>
+                                <h3 className="font-bold text-sm text-slate-900">
+                                    Informasi Profil Resmi Perusahaan
+                                </h3>
+                                <p className="text-xs text-slate-500">
+                                    Data ini digunakan oleh AI untuk menjawab profil, legalitas, dan layanan perusahaan.
+                                </p>
                             </div>
-                            <span className="text-[10px] bg-emerald-500/20 text-emerald-300 font-bold px-2 py-0.5 rounded-full flex items-center gap-1">
-                                <CheckCircle2 className="w-3 h-3" />
-                                {profile.is_approved ? 'APPROVED RESMI' : 'DRAFT'}
+                            <span className="text-[10px] bg-emerald-50 text-emerald-700 font-bold px-2.5 py-0.5 rounded-full border border-emerald-200">
+                                TERVERIFIKASI
                             </span>
                         </div>
 
-                        <form onSubmit={handleSaveProfile} className="space-y-4 text-xs">
+                        <form onSubmit={handleSaveProfile} className="space-y-4">
                             <div className="grid grid-cols-2 gap-4">
                                 <div>
-                                    <label className="block text-slate-300 font-semibold mb-1">Nama Legal Perusahaan</label>
+                                    <label className="text-xs font-bold text-slate-700 block mb-1">
+                                        Nama Legal (PT / CV) *
+                                    </label>
                                     <input
                                         type="text"
+                                        required
                                         value={data.legal_name}
                                         onChange={(e) => setData('legal_name', e.target.value)}
-                                        className="w-full bg-slate-950 border border-slate-800 rounded-xl px-3 py-2 text-white"
+                                        className="w-full bg-slate-50 border border-slate-200 rounded-xl px-3 py-2 text-xs font-bold text-slate-900 focus:ring-2 focus:ring-blue-500"
                                     />
                                 </div>
                                 <div>
-                                    <label className="block text-slate-300 font-semibold mb-1">Nama Brand / Merk</label>
+                                    <label className="text-xs font-bold text-slate-700 block mb-1">
+                                        Nama Merk / Brand *
+                                    </label>
                                     <input
                                         type="text"
+                                        required
                                         value={data.brand_name}
                                         onChange={(e) => setData('brand_name', e.target.value)}
-                                        className="w-full bg-slate-950 border border-slate-800 rounded-xl px-3 py-2 text-white"
+                                        className="w-full bg-slate-50 border border-slate-200 rounded-xl px-3 py-2 text-xs font-bold text-slate-900 focus:ring-2 focus:ring-blue-500"
                                     />
                                 </div>
                             </div>
 
                             <div>
-                                <label className="block text-slate-300 font-semibold mb-1">Deskripsi Perusahaan</label>
+                                <label className="text-xs font-bold text-slate-700 block mb-1">
+                                    Deskripsi Perusahaan & Bidang Usaha *
+                                </label>
                                 <textarea
+                                    rows={3}
+                                    required
                                     value={data.description}
                                     onChange={(e) => setData('description', e.target.value)}
-                                    rows={3}
-                                    className="w-full bg-slate-950 border border-slate-800 rounded-xl p-3 text-white"
+                                    className="w-full bg-slate-50 border border-slate-200 rounded-xl px-3 py-2 text-xs text-slate-900 focus:ring-2 focus:ring-blue-500 leading-relaxed"
                                 />
                             </div>
 
                             <div>
-                                <label className="block text-slate-300 font-semibold mb-1">Website Resmi</label>
+                                <label className="text-xs font-bold text-slate-700 block mb-1">
+                                    Website Resmi
+                                </label>
                                 <input
                                     type="text"
                                     value={data.website}
                                     onChange={(e) => setData('website', e.target.value)}
-                                    className="w-full bg-slate-950 border border-slate-800 rounded-xl px-3 py-2 text-white"
+                                    className="w-full bg-slate-50 border border-slate-200 rounded-xl px-3 py-2 text-xs font-semibold text-slate-900 focus:ring-2 focus:ring-blue-500"
                                 />
                             </div>
 
-                            <div className="flex justify-end pt-2">
+                            <div className="flex justify-end pt-3 border-t border-slate-100">
                                 <button
                                     type="submit"
                                     disabled={processing}
-                                    className="px-5 py-2.5 bg-emerald-600 hover:bg-emerald-500 text-white font-bold rounded-xl shadow-md transition"
+                                    className="flex items-center gap-2 px-5 py-2.5 rounded-xl bg-blue-600 hover:bg-blue-700 text-white text-xs font-bold transition shadow-xs"
                                 >
-                                    {processing ? 'Menyimpan...' : 'Simpan & Approve Profil Bisnis'}
+                                    <Save className="w-4 h-4" />
+                                    <span>{processing ? 'Menyimpan...' : 'Simpan & Terapkan Profil'}</span>
                                 </button>
                             </div>
                         </form>
                     </div>
 
-                    {/* Right 1 Col: Customer-Shareable Documents & Compro PDF */}
-                    <div className="bg-slate-900 border border-slate-800 rounded-2xl p-6 shadow-sm space-y-5">
-                        <div className="pb-3 border-b border-slate-800">
-                            <h3 className="font-bold text-sm text-white flex items-center gap-1.5">
-                                <FileCheck className="w-4 h-4 text-emerald-400" />
-                                <span>Dokumen Approved untuk Pelanggan</span>
-                            </h3>
-                            <p className="text-[11px] text-slate-400">
-                                Dokumen berklasifikasi <code className="text-emerald-300">customer_shareable</code> yang diizinkan dikirimkan oleh AI ke pelanggan WhatsApp.
-                            </p>
+                    {/* Right Col: Dokumen Terbitan & Histori Ekstraksi */}
+                    <div className="space-y-6">
+                        <div className="bg-white border border-slate-200/80 rounded-2xl p-6 shadow-xs space-y-4">
+                            <h3 className="font-bold text-sm text-slate-900">Dokumen Resmi (Compro PDF)</h3>
+                            <div className="p-4 bg-blue-50/50 rounded-xl border border-blue-100 space-y-2">
+                                <div className="flex items-center gap-2 text-blue-700 font-bold text-xs">
+                                    <FileText className="w-4 h-4" />
+                                    <span>Company_Profile_ATS_2026.pdf</span>
+                                </div>
+                                <p className="text-[11px] text-slate-500">
+                                    Dokumen resmi yang otomatis dilampirkan oleh bot WhatsApp saat pelanggan meminta katalog atau profil perusahaan.
+                                </p>
+                            </div>
                         </div>
 
-                        <div className="space-y-3">
-                            {documents.map((doc) => (
-                                <div
-                                    key={doc.id}
-                                    className="p-3 bg-slate-950 border border-slate-800 rounded-xl space-y-2"
-                                >
-                                    <div className="flex items-start justify-between">
-                                        <div>
-                                            <h4 className="font-bold text-xs text-white leading-snug">{doc.title}</h4>
-                                            <span className="text-[10px] text-emerald-400 uppercase font-bold">
-                                                {doc.classification}
-                                            </span>
+                        <div className="bg-white border border-slate-200/80 rounded-2xl p-6 shadow-xs space-y-4">
+                            <h3 className="font-bold text-sm text-slate-900">Riwayat Ekstraksi AI</h3>
+                            <div className="space-y-2.5">
+                                {recent_imports.length === 0 ? (
+                                    <p className="text-xs text-slate-400 italic">Belum ada riwayat ekstraksi.</p>
+                                ) : (
+                                    recent_imports.map((imp) => (
+                                        <div
+                                            key={imp.id}
+                                            className="p-3 bg-slate-50 rounded-xl border border-slate-100 text-xs space-y-1"
+                                        >
+                                            <div className="flex items-center justify-between font-bold text-slate-800">
+                                                <span className="truncate">{imp.document_name}</span>
+                                                <span className="text-[10px] text-emerald-600 bg-emerald-50 px-2 py-0.5 rounded-md">
+                                                    {imp.status}
+                                                </span>
+                                            </div>
+                                            <p className="text-[10px] text-slate-400">
+                                                {new Date(imp.created_at).toLocaleDateString('id-ID', {
+                                                    day: 'numeric',
+                                                    month: 'short',
+                                                    year: 'numeric',
+                                                })}
+                                            </p>
                                         </div>
-                                        <FileText className="w-4 h-4 text-indigo-400 shrink-0" />
-                                    </div>
-                                    <p className="text-[11px] text-slate-400 line-clamp-3">
-                                        {doc.file_content_text}
-                                    </p>
-                                </div>
-                            ))}
+                                    ))
+                                )}
+                            </div>
                         </div>
                     </div>
                 </div>
-
-                {/* Upload & Extraction Preview Modal */}
-                {uploadModalOpen && (
-                    <div className="fixed inset-0 z-50 bg-black/70 backdrop-blur-sm flex items-center justify-center p-4">
-                        <div className="bg-slate-900 border border-slate-800 rounded-2xl p-6 max-w-2xl w-full shadow-2xl space-y-4 max-h-[90vh] overflow-y-auto">
-                            <div className="flex items-center justify-between pb-3 border-b border-slate-800">
-                                <h3 className="font-bold text-sm text-white">Upload Dokumen Company Profile (Compro)</h3>
-                                <button onClick={() => setUploadModalOpen(false)} className="text-slate-400 hover:text-white">
-                                    <X className="w-5 h-5" />
-                                </button>
-                            </div>
-
-                            {!extractionPreview ? (
-                                <div className="space-y-3 text-xs">
-                                    <div>
-                                        <label className="block text-slate-300 font-semibold mb-1">Nama File Dokumen</label>
-                                        <input
-                                            type="text"
-                                            value={filename}
-                                            onChange={(e) => setFilename(e.target.value)}
-                                            className="w-full bg-slate-950 border border-slate-800 rounded-xl px-3 py-2 text-white"
-                                        />
-                                    </div>
-
-                                    <div>
-                                        <label className="block text-slate-300 font-semibold mb-1">Konten / Hasil Ekstraksi OCR Teks Dokumen</label>
-                                        <textarea
-                                            value={docText}
-                                            onChange={(e) => setDocText(e.target.value)}
-                                            rows={6}
-                                            placeholder="Paste isi company profile di sini untuk diekstrak otomatis menjadi data terstruktur..."
-                                            className="w-full bg-slate-950 border border-slate-800 rounded-xl p-3 text-white placeholder-slate-600"
-                                        />
-                                    </div>
-
-                                    <div className="flex justify-end gap-2 pt-2">
-                                        <button
-                                            type="button"
-                                            onClick={() => setUploadModalOpen(false)}
-                                            className="px-3 py-2 text-slate-400 hover:text-white"
-                                        >
-                                            Batal
-                                        </button>
-                                        <button
-                                            type="button"
-                                            onClick={handleUploadCompro}
-                                            disabled={uploading}
-                                            className="px-4 py-2 bg-indigo-600 hover:bg-indigo-500 text-white font-bold rounded-xl shadow-md flex items-center gap-2"
-                                        >
-                                            <Upload className="w-4 h-4" />
-                                            <span>{uploading ? 'Mengekstrak Field...' : 'Ekstrak Profil Otomatis'}</span>
-                                        </button>
-                                    </div>
-                                </div>
-                            ) : (
-                                <div className="space-y-4 text-xs">
-                                    <div className="p-3 bg-emerald-950/60 border border-emerald-800 rounded-xl text-emerald-300 font-semibold">
-                                        Field berhasil diekstrak! Tinjau hasil ekstraksi berdampingan dengan sumber sebelum disimpan:
-                                    </div>
-
-                                    <div className="space-y-2 bg-slate-950 p-4 rounded-xl border border-slate-800 text-slate-300">
-                                        <p><strong>Nama Legal:</strong> {extractionPreview.legal_name}</p>
-                                        <p><strong>Brand:</strong> {extractionPreview.brand_name}</p>
-                                        <p><strong>Deskripsi:</strong> {extractionPreview.description}</p>
-                                        <p><strong>Website:</strong> {extractionPreview.website}</p>
-                                        <p><strong>Layanan ({extractionPreview.services?.length}):</strong> {extractionPreview.services?.join(', ')}</p>
-                                    </div>
-
-                                    <div className="flex justify-end gap-2 pt-2">
-                                        <button
-                                            type="button"
-                                            onClick={() => setExtractionPreview(null)}
-                                            className="px-3 py-2 text-slate-400 hover:text-white"
-                                        >
-                                            Ulangi
-                                        </button>
-                                        <button
-                                            type="button"
-                                            onClick={applyExtractedData}
-                                            className="px-4 py-2 bg-emerald-600 hover:bg-emerald-500 text-white font-bold rounded-xl shadow-md"
-                                        >
-                                            Terapkan ke Form Profil
-                                        </button>
-                                    </div>
-                                </div>
-                            )}
-                        </div>
-                    </div>
-                )}
             </div>
+
+            {/* UPLOAD & EXTRACT MODAL */}
+            {uploadModalOpen && (
+                <div className="fixed inset-0 z-50 bg-slate-900/40 backdrop-blur-xs flex items-center justify-center p-4">
+                    <div className="bg-white border border-slate-200 rounded-2xl p-6 max-w-2xl w-full shadow-2xl space-y-4 max-h-[90vh] overflow-y-auto">
+                        <div className="flex items-center justify-between pb-3 border-b border-slate-100">
+                            <h3 className="font-bold text-base text-slate-900">
+                                Ekstraksi Teks Dokumen Company Profile (Compro)
+                            </h3>
+                            <button onClick={() => setUploadModalOpen(false)} className="text-slate-400">
+                                <X className="w-5 h-5" />
+                            </button>
+                        </div>
+
+                        {!extractionPreview ? (
+                            <div className="space-y-4">
+                                <div>
+                                    <label className="text-xs font-bold text-slate-700 block mb-1">
+                                        Nama File Referensi
+                                    </label>
+                                    <input
+                                        type="text"
+                                        value={filename}
+                                        onChange={(e) => setFilename(e.target.value)}
+                                        className="w-full bg-slate-50 border border-slate-200 rounded-xl px-3 py-2 text-xs font-semibold text-slate-900"
+                                    />
+                                </div>
+
+                                <div>
+                                    <label className="text-xs font-bold text-slate-700 block mb-1">
+                                        Isi Teks Dokumen Company Profile
+                                    </label>
+                                    <textarea
+                                        rows={8}
+                                        value={docText}
+                                        onChange={(e) => setDocText(e.target.value)}
+                                        placeholder="Paste isi teks dari dokumen PDF profil perusahaan di sini..."
+                                        className="w-full bg-slate-50 border border-slate-200 rounded-xl p-3 text-xs text-slate-900 font-mono leading-relaxed"
+                                    />
+                                </div>
+
+                                <div className="flex justify-end gap-2 pt-3 border-t border-slate-100">
+                                    <button
+                                        onClick={() => setUploadModalOpen(false)}
+                                        className="px-4 py-2 text-xs font-semibold rounded-xl text-slate-600 hover:bg-slate-100"
+                                    >
+                                        Batal
+                                    </button>
+                                    <button
+                                        onClick={handleUploadCompro}
+                                        disabled={uploading || !docText.trim()}
+                                        className="px-5 py-2 text-xs font-bold rounded-xl bg-blue-600 text-white hover:bg-blue-700 shadow-xs"
+                                    >
+                                        {uploading ? 'Membedah Dokumen...' : 'Ekstrak dengan AI'}
+                                    </button>
+                                </div>
+                            </div>
+                        ) : (
+                            <div className="space-y-4">
+                                <div className="p-4 bg-emerald-50 rounded-xl border border-emerald-200 space-y-2 text-xs">
+                                    <h4 className="font-bold text-emerald-900 flex items-center gap-1.5">
+                                        <CheckCircle2 className="w-4 h-4 text-emerald-600" />
+                                        Hasil Ekstraksi AI Berhasil Ditemukan
+                                    </h4>
+                                    <p className="text-emerald-800">
+                                        <strong>Legal Name:</strong> {extractionPreview.legal_name}
+                                    </p>
+                                    <p className="text-emerald-800">
+                                        <strong>Brand Name:</strong> {extractionPreview.brand_name}
+                                    </p>
+                                    <p className="text-emerald-800">
+                                        <strong>Deskripsi:</strong> {extractionPreview.description}
+                                    </p>
+                                </div>
+
+                                <div className="flex justify-end gap-2 pt-3 border-t border-slate-100">
+                                    <button
+                                        onClick={() => setExtractionPreview(null)}
+                                        className="px-4 py-2 text-xs font-semibold rounded-xl text-slate-600 hover:bg-slate-100"
+                                    >
+                                        Ulangi
+                                    </button>
+                                    <button
+                                        onClick={applyExtractedData}
+                                        className="px-5 py-2 text-xs font-bold rounded-xl bg-emerald-600 text-white hover:bg-emerald-700 shadow-xs"
+                                    >
+                                        Terapkan ke Formulir Profil
+                                    </button>
+                                </div>
+                            </div>
+                        )}
+                    </div>
+                </div>
+            )}
         </AppLayout>
     );
 }

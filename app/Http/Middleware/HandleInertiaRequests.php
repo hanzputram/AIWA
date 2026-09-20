@@ -76,6 +76,7 @@ class HandleInertiaRequests extends Middleware
                 'user' => $user ? [
                     'id' => $user->id,
                     'name' => $user->name,
+                    'username' => $user->username ?: explode('@', $user->email)[0],
                     'email' => $user->email,
                     'role' => $userRole,
                     'permissions' => $permissions,

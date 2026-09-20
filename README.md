@@ -110,7 +110,8 @@ php artisan test
 ---
 
 ## 6. Dokumentasi Lengkap
-- [Panduan Setup WhatsApp](docs/setup-whatsapp.md)
+- [Panduan Setup Meta for Developers (Cloud API)](docs/META_DEVELOPER_SETUP.md) *(Langkah demi langkah registrasi WABA, System User Token, Webhook & Real Number)*
+- [Panduan Setup WhatsApp & Sandbox](docs/setup-whatsapp.md)
 - [Kebijakan AI Sales & Margin Protection](docs/ai-sales-policy.md)
 - [Protokol Human Takeover & Fencing](docs/human-takeover.md)
 - [Laporan Hasil Pengujian Otomatis](docs/test-report.md)

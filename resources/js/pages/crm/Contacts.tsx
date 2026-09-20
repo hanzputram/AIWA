@@ -1,7 +1,7 @@
 import React, { useState } from 'react';
 import AppLayout from '../../layouts/AppLayout';
-import { Head, useForm, Link } from '@inertiajs/react';
-import { Users, Plus, Search, Phone, Mail, Building2, Tag, X } from 'lucide-react';
+import { Head, router } from '@inertiajs/react';
+import { Users, Plus, Search, Edit2, Trash2, Phone, Mail, Building2, Tag, X } from 'lucide-react';
 
 interface Props {
     contacts: Array<any>;
@@ -10,9 +10,11 @@ interface Props {
 
 export default function ContactsIndex({ contacts, companies }: Props) {
     const [search, setSearch] = useState('');
-    const [createModalOpen, setCreateModalOpen] = useState(false);
+    const [isCreateOpen, setIsCreateOpen] = useState(false);
+    const [isEditOpen, setIsEditOpen] = useState(false);
+    const [selectedContact, setSelectedContact] = useState<any>(null);
 
-    const { data, setData, post, processing, reset } = useForm({
+    const [form, setForm] = useState({
         name: '',
         phone: '',
         email: '',
@@ -21,188 +23,275 @@ export default function ContactsIndex({ contacts, companies }: Props) {
         customer_tier: 'standard',
     });
 
-    const filtered = contacts.filter((c) =>
-        c.name.toLowerCase().includes(search.toLowerCase()) || c.phone_e164.includes(search)
+    const filtered = contacts.filter(
+        (c) => c.name.toLowerCase().includes(search.toLowerCase()) || c.phone_e164.includes(search)
     );
 
-    const submitCreate = (e: React.FormEvent) => {
-        e.preventDefault();
-        post('/app/contacts', {
-            onSuccess: () => {
-                setCreateModalOpen(false);
-                reset();
-            },
+    const openCreate = () => {
+        setSelectedContact(null);
+        setForm({
+            name: '',
+            phone: '',
+            email: '',
+            company_id: '',
+            job_title: '',
+            customer_tier: 'standard',
         });
+        setIsCreateOpen(true);
+    };
+
+    const openEdit = (c: any) => {
+        setSelectedContact(c);
+        setForm({
+            name: c.name,
+            phone: c.phone_e164,
+            email: c.email || '',
+            company_id: c.company_id?.toString() || '',
+            job_title: c.job_title || '',
+            customer_tier: c.customer_tier || 'standard',
+        });
+        setIsEditOpen(true);
+    };
+
+    const handleSave = (e: React.FormEvent) => {
+        e.preventDefault();
+        if (selectedContact) {
+            router.put(`/app/contacts/${selectedContact.id}`, form, {
+                onSuccess: () => setIsEditOpen(false),
+            });
+        } else {
+            router.post('/app/contacts', form, {
+                onSuccess: () => setIsCreateOpen(false),
+            });
+        }
+    };
+
+    const handleDelete = (id: number, name: string) => {
+        if (confirm(`Hapus kontak [${name}]?`)) {
+            router.delete(`/app/contacts/${id}`);
+        }
     };
 
     return (
         <AppLayout title="Kontak & Database Pelanggan">
-            <Head title="Kontak Pelanggan" />
+            <Head title="Kontak Pelanggan — AIWA HQ" />
 
-            <div className="p-6 space-y-6 max-w-7xl mx-auto">
-                <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
-                    <div>
-                        <h2 className="text-lg font-bold text-white tracking-tight flex items-center gap-2">
-                            <Users className="w-5 h-5 text-indigo-400" />
-                            <span>Database Pelanggan & Kontak WhatsApp</span>
-                        </h2>
-                        <p className="text-xs text-slate-400">
-                            Nomor pelanggan (penerima) dikelola terpisah dari nomor bisnis pengirim. Normalisasi nomor Indonesia E.164 otomatis (+62).
-                        </p>
+            <div className="p-6 md:p-8 space-y-6 max-w-[1600px] mx-auto">
+                <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 bg-white p-6 rounded-2xl border border-slate-200/80 shadow-xs">
+                    <div className="flex items-center gap-3">
+                        <div className="w-10 h-10 rounded-xl bg-blue-50 text-blue-600 flex items-center justify-center font-bold">
+                            <Users className="w-5 h-5" />
+                        </div>
+                        <div>
+                            <h1 className="text-base font-bold text-slate-900 tracking-tight">
+                                Database Pelanggan & Kontak WhatsApp
+                            </h1>
+                            <p className="text-xs text-slate-500">
+                                Normalisasi otomatis format E.164 (+62), penugasan tier pelanggan, dan relasi B2B perusahaan.
+                            </p>
+                        </div>
                     </div>
 
-                    <div className="flex items-center gap-2">
+                    <div className="flex items-center gap-3">
                         <div className="relative w-64">
-                            <Search className="w-3.5 h-3.5 text-slate-500 absolute left-3 top-2.5" />
+                            <Search className="w-4 h-4 text-slate-400 absolute left-3.5 top-2.5" />
                             <input
                                 type="text"
                                 value={search}
                                 onChange={(e) => setSearch(e.target.value)}
                                 placeholder="Cari nama atau nomor..."
-                                className="w-full bg-slate-900 border border-slate-800 rounded-xl pl-8 pr-3 py-1.5 text-xs text-white placeholder-slate-500"
+                                className="w-full bg-slate-100/90 border-none rounded-xl pl-9 pr-3 py-2 text-xs text-slate-800 placeholder-slate-400 focus:ring-2 focus:ring-blue-500"
                             />
                         </div>
                         <button
-                            onClick={() => setCreateModalOpen(true)}
-                            className="flex items-center gap-1.5 px-3 py-1.5 bg-indigo-600 hover:bg-indigo-500 text-white rounded-xl text-xs font-bold shadow-md"
+                            onClick={openCreate}
+                            className="flex items-center gap-2 px-4 py-2 bg-blue-600 hover:bg-blue-700 text-white rounded-xl text-xs font-bold transition shadow-xs"
                         >
                             <Plus className="w-4 h-4" />
-                            <span>Tambah Kontak</span>
+                            <span>+ Tambah Kontak</span>
                         </button>
                     </div>
                 </div>
 
-                <div className="bg-slate-900 border border-slate-800 rounded-2xl overflow-hidden shadow-sm">
-                    <table className="w-full text-left text-xs text-slate-300">
-                        <thead className="bg-slate-950 text-slate-400 uppercase text-[10px]">
-                            <tr>
-                                <th className="p-3.5">Nama Kontak</th>
-                                <th className="p-3.5">Nomor E.164</th>
-                                <th className="p-3.5">Perusahaan</th>
-                                <th className="p-3.5">Jabatan</th>
-                                <th className="p-3.5">Tier Pelanggan</th>
-                                <th className="p-3.5">Aktivitas Terakhir</th>
+                <div className="bg-white border border-slate-200/80 rounded-2xl overflow-hidden shadow-xs">
+                    <table className="w-full text-left text-xs text-slate-700">
+                        <thead>
+                            <tr className="border-b border-slate-100 text-slate-400 font-bold bg-slate-50/50">
+                                <th className="p-4 font-semibold">Nama Kontak</th>
+                                <th className="p-4 font-semibold">Nomor WhatsApp E.164</th>
+                                <th className="p-4 font-semibold">Perusahaan B2B</th>
+                                <th className="p-4 font-semibold">Jabatan</th>
+                                <th className="p-4 font-semibold">Tier</th>
+                                <th className="p-4 font-semibold text-right">Aksi</th>
                             </tr>
                         </thead>
-                        <tbody className="divide-y divide-slate-800/60">
+                        <tbody className="divide-y divide-slate-100">
                             {filtered.map((c) => (
-                                <tr key={c.id} className="hover:bg-slate-800/40">
-                                    <td className="p-3.5 font-bold text-white">{c.name}</td>
-                                    <td className="p-3.5 font-mono text-indigo-300">{c.phone_e164}</td>
-                                    <td className="p-3.5 text-slate-300">{c.company?.name || 'Individu'}</td>
-                                    <td className="p-3.5 text-slate-400">{c.job_title || '-'}</td>
-                                    <td className="p-3.5">
-                                        <span className={`text-[10px] font-bold px-2 py-0.5 rounded uppercase ${
-                                            c.customer_tier === 'gold'
-                                                ? 'bg-amber-500/20 text-amber-300'
-                                                : c.customer_tier === 'silver'
-                                                ? 'bg-slate-700 text-slate-200'
-                                                : 'bg-slate-800 text-slate-400'
-                                        }`}>
+                                <tr key={c.id} className="hover:bg-slate-50/60 transition">
+                                    <td className="p-4 font-bold text-slate-900">{c.name}</td>
+                                    <td className="p-4 font-mono font-semibold text-blue-600">{c.phone_e164}</td>
+                                    <td className="p-4 font-medium text-slate-600">
+                                        {c.company?.name || <span className="text-slate-400 italic">Individu</span>}
+                                    </td>
+                                    <td className="p-4 text-slate-500">{c.job_title || '-'}</td>
+                                    <td className="p-4">
+                                        <span
+                                            className={`text-[10px] font-bold px-2 py-0.5 rounded-full uppercase ${
+                                                c.customer_tier === 'gold' || c.customer_tier === 'platinum'
+                                                    ? 'bg-amber-100 text-amber-800'
+                                                    : c.customer_tier === 'silver'
+                                                    ? 'bg-slate-200 text-slate-800'
+                                                    : 'bg-blue-50 text-blue-700'
+                                            }`}
+                                        >
                                             {c.customer_tier}
                                         </span>
                                     </td>
-                                    <td className="p-3.5 text-slate-500">
-                                        {c.last_inbound_at ? new Date(c.last_inbound_at).toLocaleString('id-ID') : 'Belum ada chat'}
+                                    <td className="p-4 text-right">
+                                        <div className="flex items-center justify-end gap-1">
+                                            <button
+                                                onClick={() => openEdit(c)}
+                                                className="p-1.5 text-slate-400 hover:text-blue-600 rounded-lg"
+                                                title="Ubah Kontak"
+                                            >
+                                                <Edit2 className="w-4 h-4" />
+                                            </button>
+                                            <button
+                                                onClick={() => handleDelete(c.id, c.name)}
+                                                className="p-1.5 text-slate-400 hover:text-rose-600 rounded-lg"
+                                                title="Hapus Kontak"
+                                            >
+                                                <Trash2 className="w-4 h-4" />
+                                            </button>
+                                        </div>
                                     </td>
                                 </tr>
                             ))}
                         </tbody>
                     </table>
                 </div>
+            </div>
 
-                {/* Create Modal */}
-                {createModalOpen && (
-                    <div className="fixed inset-0 z-50 bg-black/70 backdrop-blur-sm flex items-center justify-center p-4">
-                        <div className="bg-slate-900 border border-slate-800 rounded-2xl p-6 max-w-md w-full shadow-2xl space-y-4">
-                            <div className="flex items-center justify-between pb-3 border-b border-slate-800">
-                                <h3 className="font-bold text-sm text-white">Tambah Kontak Pelanggan Baru</h3>
-                                <button onClick={() => setCreateModalOpen(false)} className="text-slate-400 hover:text-white">
-                                    <X className="w-5 h-5" />
-                                </button>
+            {/* CREATE / EDIT MODAL */}
+            {(isCreateOpen || isEditOpen) && (
+                <div className="fixed inset-0 z-50 bg-slate-900/40 backdrop-blur-xs flex items-center justify-center p-4">
+                    <div className="bg-white border border-slate-200 rounded-2xl p-6 max-w-md w-full shadow-2xl space-y-4">
+                        <div className="flex items-center justify-between pb-3 border-b border-slate-100">
+                            <h3 className="font-bold text-base text-slate-900">
+                                {isCreateOpen ? 'Tambah Kontak Baru' : 'Ubah Data Kontak'}
+                            </h3>
+                            <button
+                                onClick={() => {
+                                    setIsCreateOpen(false);
+                                    setIsEditOpen(false);
+                                }}
+                                className="text-slate-400"
+                            >
+                                <X className="w-5 h-5" />
+                            </button>
+                        </div>
+
+                        <form onSubmit={handleSave} className="space-y-3">
+                            <div>
+                                <label className="text-xs font-bold text-slate-700 block mb-1">Nama Lengkap *</label>
+                                <input
+                                    type="text"
+                                    required
+                                    value={form.name}
+                                    onChange={(e) => setForm({ ...form, name: e.target.value })}
+                                    placeholder="Budi Santoso"
+                                    className="w-full bg-slate-50 border border-slate-200 rounded-xl px-3 py-2 text-xs font-bold text-slate-900 focus:ring-2 focus:ring-blue-500"
+                                />
                             </div>
 
-                            <form onSubmit={submitCreate} className="space-y-3 text-xs">
+                            <div className="grid grid-cols-2 gap-3">
                                 <div>
-                                    <label className="block text-slate-300 font-semibold mb-1">Nama Lengkap</label>
+                                    <label className="text-xs font-bold text-slate-700 block mb-1">Nomor Telepon *</label>
                                     <input
                                         type="text"
-                                        value={data.name}
-                                        onChange={(e) => setData('name', e.target.value)}
                                         required
-                                        className="w-full bg-slate-950 border border-slate-800 rounded-xl px-3 py-2 text-white"
-                                    />
-                                </div>
-                                <div>
-                                    <label className="block text-slate-300 font-semibold mb-1">Nomor WhatsApp (08... / +62...)</label>
-                                    <input
-                                        type="text"
-                                        value={data.phone}
-                                        onChange={(e) => setData('phone', e.target.value)}
+                                        value={form.phone}
+                                        onChange={(e) => setForm({ ...form, phone: e.target.value })}
                                         placeholder="08123456789"
-                                        required
-                                        className="w-full bg-slate-950 border border-slate-800 rounded-xl px-3 py-2 text-white font-mono"
+                                        className="w-full bg-slate-50 border border-slate-200 rounded-xl px-3 py-2 text-xs font-mono font-bold text-slate-900"
                                     />
                                 </div>
                                 <div>
-                                    <label className="block text-slate-300 font-semibold mb-1">Perusahaan</label>
+                                    <label className="text-xs font-bold text-slate-700 block mb-1">Email</label>
+                                    <input
+                                        type="email"
+                                        value={form.email}
+                                        onChange={(e) => setForm({ ...form, email: e.target.value })}
+                                        placeholder="budi@ptmaju.com"
+                                        className="w-full bg-slate-50 border border-slate-200 rounded-xl px-3 py-2 text-xs text-slate-900"
+                                    />
+                                </div>
+                            </div>
+
+                            <div className="grid grid-cols-2 gap-3">
+                                <div>
+                                    <label className="text-xs font-bold text-slate-700 block mb-1">Perusahaan</label>
                                     <select
-                                        value={data.company_id}
-                                        onChange={(e) => setData('company_id', e.target.value)}
-                                        className="w-full bg-slate-950 border border-slate-800 rounded-xl px-3 py-2 text-white"
+                                        value={form.company_id}
+                                        onChange={(e) => setForm({ ...form, company_id: e.target.value })}
+                                        className="w-full bg-slate-50 border border-slate-200 rounded-xl px-3 py-2 text-xs font-semibold text-slate-900"
                                     >
-                                        <option value="">Pilih Perusahaan (Opsional)</option>
+                                        <option value="">-- Individu / None --</option>
                                         {companies.map((co) => (
-                                            <option key={co.id} value={co.id}>{co.name}</option>
+                                            <option key={co.id} value={co.id}>
+                                                {co.name}
+                                            </option>
                                         ))}
                                     </select>
                                 </div>
-                                <div className="grid grid-cols-2 gap-3">
-                                    <div>
-                                        <label className="block text-slate-300 font-semibold mb-1">Jabatan</label>
-                                        <input
-                                            type="text"
-                                            value={data.job_title}
-                                            onChange={(e) => setData('job_title', e.target.value)}
-                                            className="w-full bg-slate-950 border border-slate-800 rounded-xl px-3 py-2 text-white"
-                                        />
-                                    </div>
-                                    <div>
-                                        <label className="block text-slate-300 font-semibold mb-1">Tier Pelanggan</label>
-                                        <select
-                                            value={data.customer_tier}
-                                            onChange={(e) => setData('customer_tier', e.target.value)}
-                                            className="w-full bg-slate-950 border border-slate-800 rounded-xl px-3 py-2 text-white"
-                                        >
-                                            <option value="standard">Standard</option>
-                                            <option value="silver">Silver</option>
-                                            <option value="gold">Gold</option>
-                                            <option value="platinum">Platinum</option>
-                                        </select>
-                                    </div>
+                                <div>
+                                    <label className="text-xs font-bold text-slate-700 block mb-1">Tier Pelanggan</label>
+                                    <select
+                                        value={form.customer_tier}
+                                        onChange={(e) => setForm({ ...form, customer_tier: e.target.value })}
+                                        className="w-full bg-slate-50 border border-slate-200 rounded-xl px-3 py-2 text-xs font-semibold text-slate-900"
+                                    >
+                                        <option value="standard">Standard</option>
+                                        <option value="silver">Silver</option>
+                                        <option value="gold">Gold</option>
+                                        <option value="platinum">Platinum</option>
+                                    </select>
                                 </div>
+                            </div>
 
-                                <div className="flex justify-end gap-2 pt-2">
-                                    <button
-                                        type="button"
-                                        onClick={() => setCreateModalOpen(false)}
-                                        className="px-3 py-2 text-slate-400 hover:text-white"
-                                    >
-                                        Batal
-                                    </button>
-                                    <button
-                                        type="submit"
-                                        disabled={processing}
-                                        className="px-4 py-2 bg-indigo-600 hover:bg-indigo-500 text-white font-bold rounded-xl shadow-md"
-                                    >
-                                        Simpan Kontak
-                                    </button>
-                                </div>
-                            </form>
-                        </div>
+                            <div>
+                                <label className="text-xs font-bold text-slate-700 block mb-1">Jabatan / Role</label>
+                                <input
+                                    type="text"
+                                    value={form.job_title}
+                                    onChange={(e) => setForm({ ...form, job_title: e.target.value })}
+                                    placeholder="Purchasing Manager"
+                                    className="w-full bg-slate-50 border border-slate-200 rounded-xl px-3 py-2 text-xs text-slate-900"
+                                />
+                            </div>
+
+                            <div className="flex justify-end gap-2 pt-3 border-t border-slate-100">
+                                <button
+                                    type="button"
+                                    onClick={() => {
+                                        setIsCreateOpen(false);
+                                        setIsEditOpen(false);
+                                    }}
+                                    className="px-4 py-2 text-xs font-semibold rounded-xl text-slate-600 hover:bg-slate-100"
+                                >
+                                    Batal
+                                </button>
+                                <button
+                                    type="submit"
+                                    className="px-5 py-2 text-xs font-bold rounded-xl bg-blue-600 text-white hover:bg-blue-700 shadow-xs"
+                                >
+                                    Simpan Kontak
+                                </button>
+                            </div>
+                        </form>
                     </div>
-                )}
-            </div>
+                </div>
+            )}
         </AppLayout>
     );
 }

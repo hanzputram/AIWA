@@ -47,15 +47,7 @@ class AISalesOrchestrator
         $channel = $conversation->channel;
         $workspace = $conversation->workspace;
 
-        // Check if human is in control
-        if ($conversation->control_owner === 'human_active') {
-            return [
-                'outbound_text' => null,
-                'status' => 'suppressed_by_human_active',
-            ];
-        }
-
-        // 1. Record inbound message
+        // 1. ALWAYS Record inbound message first so it appears in the chat room!
         $inboundMessage = Message::create([
             'conversation_id' => $conversation->id,
             'workspace_id' => $workspace->id,
@@ -72,6 +64,16 @@ class AISalesOrchestrator
         $conversation->last_message_at = now();
         $conversation->increment('unread_count');
         $conversation->save();
+
+        // Check if human is in control (suppress autonomous AI reply so human can chat live)
+        if ($conversation->control_owner === 'human_active') {
+            return [
+                'action' => 'human_in_control',
+                'message_id' => $inboundMessage->id,
+                'outbound_text' => null,
+                'status' => 'suppressed_by_human_active',
+            ];
+        }
 
         // 2. Assess Intent (Explainable Intent Score 0 - 100)
         $intentResult = $this->intentScorer->assessIntent($conversation, $customerText);
@@ -175,7 +177,7 @@ class AISalesOrchestrator
                 'sender_type' => 'ai',
                 'kind' => 'text',
                 'content' => $replyText,
-                'state' => 'delivered',
+                'state' => 'sent',
                 'control_epoch_snapshot' => $currentEpoch,
                 'metadata' => [
                     'source' => 'Knowledge Base Release v1.0',
@@ -183,6 +185,21 @@ class AISalesOrchestrator
                     'intent_score' => $intentResult['score'],
                 ],
             ]);
+
+            // Dispatch to real WhatsApp Cloud API if channel is Meta
+            if ($channel->provider === 'meta' || !empty($channel->secret_reference)) {
+                try {
+                    $metaProvider = new \App\Domain\Messaging\Providers\MetaCloudApiProvider();
+                    $res = $metaProvider->sendText($channel, $conversation->contact->phone_e164, $replyText);
+                    if (!empty($res['provider_message_id'])) {
+                        $aiMessage->provider_message_id = $res['provider_message_id'];
+                        $aiMessage->state = $res['status'] ?? 'sent';
+                        $aiMessage->save();
+                    }
+                } catch (\Throwable $e) {
+                    \Log::error('Failed to send Meta Cloud API message: ' . $e->getMessage());
+                }
+            }
 
             return [
                 'action' => 'ai_replied',

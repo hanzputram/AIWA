@@ -35,4 +35,11 @@ return [
         ],
     ],
 
+    'meta' => [
+        'token' => env('META_SYSTEM_USER_TOKEN'),
+        'verify_token' => env('META_VERIFY_TOKEN', 'ats_verify_token_2026'),
+        'app_secret' => env('META_APP_SECRET', 'test_secret_meta_123'),
+        'version' => env('META_GRAPH_VERSION', 'v21.0'),
+    ],
+
 ];

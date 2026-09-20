@@ -191,4 +191,53 @@ class PricingEngineTest extends TestCase
         $this->assertTrue($quote['requires_human_approval']);
         $this->assertEquals('missing_cost_basis', $quote['reason_code']);
     }
+
+    /**
+     * Test Brand Discount Matrix (B2B electrical matrix from user reference)
+     * e.g., Schneider MCB iC series: standard 40%, khusus floor 52%.
+     * Trying to discount >52% (e.g. 55%) violates floor and forces human approval.
+     */
+    public function test_brand_discount_matrix_khusus_floor_enforcement()
+    {
+        \App\Models\BrandDiscountMatrix::create([
+            'workspace_id' => $this->workspace->id,
+            'brand' => 'Schneider',
+            'category' => 'MCB (Koef X 1.13)',
+            'coefficient' => 1.13,
+            'series_type' => 'IC, IK',
+            'standard_discount_pct' => 40.0,
+            'max_1_discount_pct' => 45.0,
+            'max_2_discount_pct' => 50.0,
+            'khusus_discount_pct' => 52.0,
+            'is_active' => true,
+        ]);
+
+        // Base price: 125.000, HPP: 50.000 (plenty of margin)
+        // With khusus floor at 52%, sell floor price is: 125.000 * (1 - 0.52) = 60.000.
+        // If customer asks for 50% discount -> net price is 62.500 >= 60.000 (Safe).
+        // If customer asks for 55% discount -> net price is 56.250 < 60.000 (Floor breached).
+
+        $safetyCheckSafe = $this->pricingEngine->evaluateConcessionSafety(
+            workspaceId: $this->workspace->id,
+            basePrice: 125000,
+            hppCost: 50000,
+            requestedDiscountPct: 50.0,
+            productBrand: 'Schneider Electric',
+            productCategory: 'MCB (Koef X 1.13)',
+            productSkuOrSeries: 'iC60N'
+        );
+        $this->assertTrue($safetyCheckSafe['is_safe'], '50% discount is within 52% khusus limit.');
+
+        $safetyCheckBreached = $this->pricingEngine->evaluateConcessionSafety(
+            workspaceId: $this->workspace->id,
+            basePrice: 125000,
+            hppCost: 50000,
+            requestedDiscountPct: 55.0,
+            productBrand: 'Schneider Electric',
+            productCategory: 'MCB (Koef X 1.13)',
+            productSkuOrSeries: 'iC60N'
+        );
+        $this->assertFalse($safetyCheckBreached['is_safe'], '55% discount breaches the 52% khusus floor limit.');
+        $this->assertEquals('matrix_floor_breached', $safetyCheckBreached['reason_code']);
+    }
 }

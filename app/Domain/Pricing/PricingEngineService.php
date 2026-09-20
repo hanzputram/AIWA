@@ -7,6 +7,7 @@ use App\Models\PriceBook;
 use App\Models\PriceEntry;
 use App\Models\CostEntry;
 use App\Models\DiscountPolicy;
+use App\Models\BrandDiscountMatrix;
 use App\Models\Quote;
 use App\Models\QuoteRevision;
 use App\Models\QuoteLine;
@@ -90,8 +91,22 @@ class PricingEngineService
             $sellFloor = $basePrice * (1.0 - ($maxAutoDiscount / 100.0));
         }
 
+        // Enforce product base floor price from Excel PL * coefficient * (1 - discount)
+        if ($product->floor_price && (float) $product->floor_price > 0) {
+            $sellFloor = max($sellFloor, (float) $product->floor_price);
+        }
+
+        // Look up Brand Discount Matrix (Brand, Kategori, Seri)
+        $matrixRule = BrandDiscountMatrix::findMatchingRule($product->workspace_id, $product->brand, $product->category, $product->sku);
+        if ($matrixRule) {
+            if ($matrixRule->khusus_discount_pct !== null && (float) $matrixRule->khusus_discount_pct > 0) {
+                $khususFloor = $basePrice * (1.0 - ((float) $matrixRule->khusus_discount_pct / 100.0));
+                $sellFloor = max($sellFloor, $khususFloor);
+            }
+        }
+
         $violatesMarginFloor = false;
-        if ($hasKnownCost && $unitNetPrice < $sellFloor) {
+        if (($hasKnownCost || ($product->floor_price && (float) $product->floor_price > 0) || ($matrixRule && $matrixRule->khusus_discount_pct !== null)) && $unitNetPrice < $sellFloor) {
             $violatesMarginFloor = true;
         }
 
@@ -149,6 +164,15 @@ class PricingEngineService
         $marginFloorPrice = $hasHpp ? ($hppCost / (1.0 - ($minMarginPct / 100.0))) : null;
         $discountFloorPrice = $basePrice * (1.0 - ($maxAutoDiscount / 100.0));
         $effectiveFloorPrice = $hasHpp ? max($marginFloorPrice, $discountFloorPrice) : $discountFloorPrice;
+        if ($product->floor_price && (float) $product->floor_price > 0) {
+            $effectiveFloorPrice = max($effectiveFloorPrice, (float) $product->floor_price);
+        }
+
+        $matrixRule = BrandDiscountMatrix::findMatchingRule($workspaceId, $product->brand, $product->category, $product->sku);
+        if ($matrixRule && $matrixRule->khusus_discount_pct !== null && (float) $matrixRule->khusus_discount_pct > 0) {
+            $khususFloor = $basePrice * (1.0 - ((float) $matrixRule->khusus_discount_pct / 100.0));
+            $effectiveFloorPrice = max($effectiveFloorPrice, $khususFloor);
+        }
 
         $isPermissible = true;
         $requiresApproval = false;
@@ -180,6 +204,57 @@ class PricingEngineService
             'is_permissible_autonomous' => $isPermissible,
             'requires_human_approval' => $requiresApproval,
             'reason_code' => $reasonCode,
+        ];
+    }
+
+    /**
+     * Evaluate whether a concession or discount is safe against Brand Discount Matrix floor and Cost Floor
+     */
+    public function evaluateConcessionSafety(
+        int $workspaceId,
+        float $basePrice,
+        ?float $hppCost,
+        float $requestedDiscountPct,
+        ?string $productBrand = null,
+        ?string $productCategory = null,
+        ?string $productSkuOrSeries = null
+    ): array {
+        $netPrice = $basePrice * (1.0 - ($requestedDiscountPct / 100.0));
+
+        // 1. Check Brand Discount Matrix hard floor
+        $matrixRule = BrandDiscountMatrix::findMatchingRule($workspaceId, $productBrand, $productCategory, $productSkuOrSeries);
+        if ($matrixRule && $matrixRule->khusus_discount_pct !== null) {
+            $khususFloorPct = (float) $matrixRule->khusus_discount_pct;
+            if ($requestedDiscountPct > $khususFloorPct) {
+                return [
+                    'is_safe' => false,
+                    'reason_code' => 'matrix_floor_breached',
+                    'message' => "Requested discount {$requestedDiscountPct}% breaches matrix floor limit of {$khususFloorPct}%.",
+                    'matrix_rule' => $matrixRule,
+                ];
+            }
+        }
+
+        // 2. Check HPP Cost margin floor
+        if ($hppCost !== null && $hppCost > 0) {
+            $policy = DiscountPolicy::where('workspace_id', $workspaceId)->where('is_active', true)->first();
+            $minMarginPct = (float) ($policy?->minimum_gross_margin_pct ?? 20.0);
+            $marginFloor = $hppCost / (1.0 - ($minMarginPct / 100.0));
+            if ($netPrice < $marginFloor) {
+                return [
+                    'is_safe' => false,
+                    'reason_code' => 'margin_floor_breached',
+                    'message' => "Net price {$netPrice} breaches minimum gross margin floor.",
+                    'matrix_rule' => $matrixRule,
+                ];
+            }
+        }
+
+        return [
+            'is_safe' => true,
+            'reason_code' => 'ok',
+            'net_price' => $netPrice,
+            'matrix_rule' => $matrixRule,
         ];
     }
 

@@ -9,7 +9,7 @@ use Inertia\Response;
 
 class AuthController extends Controller
 {
-    public function showLogin(): Response
+    public function showLogin(): Response|\Illuminate\Http\RedirectResponse
     {
         if (Auth::check()) {
             return redirect()->route('dashboard');
@@ -20,26 +20,38 @@ class AuthController extends Controller
 
     public function login(Request $request)
     {
-        $credentials = $request->validate([
-            'email' => ['required', 'email'],
-            'password' => ['required'],
-        ]);
+        $loginInput = trim($request->input('username') ?? $request->input('email') ?? '');
+        $password = (string) $request->input('password');
 
-        if (Auth::attempt($credentials, $request->boolean('remember'))) {
+        if (empty($loginInput) || empty($password)) {
+            return back()->withErrors([
+                'username' => 'Harap masukkan username dan kata sandi.',
+            ])->onlyInput('username');
+        }
+
+        $user = \App\Models\User::where('username', $loginInput)
+            ->orWhere('email', $loginInput)
+            ->first();
+
+        if ($user && \Illuminate\Support\Facades\Hash::check($password, $user->password)) {
+            Auth::login($user, $request->boolean('remember'));
             $request->session()->regenerate();
 
-            $user = Auth::user();
-            $workspace = $user->workspaces()->first();
+            $workspace = $user->workspaces()->first() ?? \App\Models\Workspace::first();
             if ($workspace) {
                 session(['current_workspace_id' => $workspace->id]);
+                if (!$user->current_workspace_id) {
+                    $user->current_workspace_id = $workspace->id;
+                    $user->save();
+                }
             }
 
             return redirect()->intended(route('dashboard'));
         }
 
         return back()->withErrors([
-            'email' => 'Email atau kata sandi tidak cocok dengan data kami.',
-        ])->onlyInput('email');
+            'username' => 'Username atau kata sandi tidak cocok dengan data kami.',
+        ])->onlyInput('username');
     }
 
     public function logout(Request $request)

@@ -29,11 +29,11 @@ export default function QuoteShow({ quote }: Props) {
         <AppLayout title={`Quotation #${quote.quote_number}`}>
             <Head title={`Quote #${quote.quote_number}`} />
 
-            <div className="p-6 space-y-6 max-w-5xl mx-auto">
+            <div className="p-6 md:p-8 space-y-6 max-w-5xl mx-auto">
                 <div className="flex items-center justify-between">
                     <Link
                         href="/app/quotes"
-                        className="flex items-center gap-1.5 text-xs text-slate-400 hover:text-white"
+                        className="flex items-center gap-1.5 text-xs font-medium text-slate-600 hover:text-indigo-600 transition"
                     >
                         <ArrowLeft className="w-4 h-4" />
                         <span>Kembali ke Daftar Penawaran</span>
@@ -43,7 +43,7 @@ export default function QuoteShow({ quote }: Props) {
                         {canApprove && quote.status === 'pending_approval' && (
                             <button
                                 onClick={handleApprove}
-                                className="px-3.5 py-1.5 bg-emerald-600 hover:bg-emerald-500 text-white rounded-xl text-xs font-bold shadow-md flex items-center gap-1.5"
+                                className="px-3.5 py-2 bg-emerald-600 hover:bg-emerald-700 text-white rounded-xl text-xs font-semibold shadow-xs transition flex items-center gap-1.5"
                             >
                                 <CheckCircle2 className="w-4 h-4" />
                                 <span>Setujui Penawaran Khusus</span>
@@ -51,24 +51,24 @@ export default function QuoteShow({ quote }: Props) {
                         )}
                         <button
                             onClick={() => window.print()}
-                            className="px-3 py-1.5 bg-slate-800 hover:bg-slate-700 text-slate-200 rounded-xl text-xs font-semibold flex items-center gap-1.5"
+                            className="px-3.5 py-2 bg-white hover:bg-slate-50 text-slate-700 border border-slate-200 rounded-xl text-xs font-semibold flex items-center gap-1.5 shadow-xs transition"
                         >
-                            <Printer className="w-3.5 h-3.5" />
+                            <Printer className="w-3.5 h-3.5 text-slate-500" />
                             <span>Cetak / Simpan PDF</span>
                         </button>
                     </div>
                 </div>
 
                 {/* Formal Printable Document Card */}
-                <div className="bg-white text-slate-900 rounded-2xl p-8 shadow-xl space-y-6">
+                <div className="bg-white text-slate-900 rounded-2xl p-8 shadow-xs border border-slate-200/80 space-y-6">
                     {/* Header */}
                     <div className="flex justify-between items-start border-b border-slate-200 pb-6">
                         <div>
                             <div className="flex items-center gap-2">
-                                <div className="w-8 h-8 rounded-lg bg-indigo-600 text-white font-extrabold flex items-center justify-center text-sm">
+                                <div className="w-8 h-8 rounded-lg bg-slate-900 text-white font-bold flex items-center justify-center text-xs tracking-wider">
                                     ATS
                                 </div>
-                                <h1 className="font-extrabold text-xl tracking-tight text-slate-900">
+                                <h1 className="font-bold text-xl tracking-tight text-slate-900">
                                     PT ARTHA TEKNIK SEJAHTERA
                                 </h1>
                             </div>
@@ -78,10 +78,10 @@ export default function QuoteShow({ quote }: Props) {
                         </div>
 
                         <div className="text-right space-y-1">
-                            <span className="text-xs font-bold uppercase tracking-widest text-indigo-600 block">
+                            <span className="text-xs font-semibold uppercase tracking-widest text-slate-600 block">
                                 OFFICIAL QUOTATION
                             </span>
-                            <span className="text-lg font-mono font-extrabold text-slate-900 block">
+                            <span className="text-lg font-mono font-bold text-slate-900 block">
                                 #{quote.quote_number}
                             </span>
                             <span className="text-xs text-slate-500 block">

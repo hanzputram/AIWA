@@ -50,9 +50,17 @@ class WebhookController extends Controller
         $rawContent = $request->getContent();
         $signature = $request->header('X-Hub-Signature-256');
         $appSecret = config('services.meta.app_secret', 'test_secret_meta_123');
-        if ($signature) {
+
+        \Log::info('Meta Webhook received', [
+            'has_signature' => !empty($signature),
+            'entry_count' => count($payload['entry'] ?? []),
+            'payload' => $payload
+        ]);
+
+        if ($signature && $appSecret && $appSecret !== 'test_secret_meta_123') {
             $expectedSignature = 'sha256=' . hash_hmac('sha256', $rawContent, $appSecret);
             if (!hash_equals($expectedSignature, $signature)) {
+                \Log::warning('Meta Webhook Invalid signature rejected');
                 return response()->json(['error' => 'Invalid webhook signature'], 403);
             }
         }
@@ -101,6 +109,17 @@ class WebhookController extends Controller
 
                 // Run orchestrator with provider message ID
                 $this->orchestrator->handleInboundMessage($conversation, $event['text'], $providerMsgId);
+            }
+
+            // Status Updates (sent, delivered, read, failed)
+            if ($event['type'] === 'message_status') {
+                $providerMsgId = $event['message_id'] ?? null;
+                $status = $event['status'] ?? null;
+                if ($providerMsgId && $status) {
+                    \App\Models\Message::where('provider_message_id', $providerMsgId)
+                        ->update(['state' => $status]);
+                    \Log::info("Message status updated: {$providerMsgId} -> {$status}");
+                }
             }
         }
 

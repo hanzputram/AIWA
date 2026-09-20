@@ -64,7 +64,7 @@
 .kpi-card:hover {
   border-color: var(--border-hover);
   transform: translateY(-2px);
-  box-shadow: var(--shadow-glow);
+  box-shadow: var(--shadow-md);
 }
 
 .kpi-card .kpi-icon {

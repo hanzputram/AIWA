@@ -13,12 +13,15 @@ use App\Models\AuditLog;
 
 class CampaignController extends Controller
 {
+    // ==================== TEMPLATES ====================
+
     public function templates(Request $request): Response
     {
         $workspaceId = session('current_workspace_id');
 
         $templates = Template::with('channel')
             ->where('workspace_id', $workspaceId)
+            ->orderBy('created_at', 'desc')
             ->get();
 
         $channels = Channel::where('workspace_id', $workspaceId)->get();
@@ -28,6 +31,68 @@ class CampaignController extends Controller
             'channels' => $channels,
         ]);
     }
+
+    public function storeTemplate(Request $request)
+    {
+        $workspaceId = session('current_workspace_id');
+
+        $data = $request->validate([
+            'name' => ['required', 'string', 'max:255'],
+            'channel_id' => ['nullable', 'exists:channels,id'],
+            'category' => ['required', 'in:marketing,utility,authentication'],
+            'language' => ['required', 'string', 'max:10'],
+            'header_type' => ['nullable', 'in:none,text,image,document'],
+            'header_content' => ['nullable', 'string'],
+            'body_content' => ['required', 'string'],
+            'footer_content' => ['nullable', 'string'],
+        ]);
+
+        $template = Template::create(array_merge($data, [
+            'workspace_id' => $workspaceId,
+            'status' => 'approved',
+        ]));
+
+        AuditLog::log('template.created', Template::class, $template->id, ['name' => $template->name]);
+
+        return redirect()->back()->with('success', "Template WhatsApp [{$template->name}] berhasil dibuat.");
+    }
+
+    public function updateTemplate(Request $request, int $id)
+    {
+        $workspaceId = session('current_workspace_id');
+        $template = Template::where('workspace_id', $workspaceId)->findOrFail($id);
+
+        $data = $request->validate([
+            'name' => ['required', 'string', 'max:255'],
+            'channel_id' => ['nullable', 'exists:channels,id'],
+            'category' => ['required', 'in:marketing,utility,authentication'],
+            'language' => ['required', 'string', 'max:10'],
+            'header_type' => ['nullable', 'in:none,text,image,document'],
+            'header_content' => ['nullable', 'string'],
+            'body_content' => ['required', 'string'],
+            'footer_content' => ['nullable', 'string'],
+        ]);
+
+        $template->update($data);
+
+        AuditLog::log('template.updated', Template::class, $template->id, ['name' => $template->name]);
+
+        return redirect()->back()->with('success', "Template WhatsApp [{$template->name}] berhasil diperbarui.");
+    }
+
+    public function deleteTemplate(int $id)
+    {
+        $workspaceId = session('current_workspace_id');
+        $template = Template::where('workspace_id', $workspaceId)->findOrFail($id);
+        $name = $template->name;
+        $template->delete();
+
+        AuditLog::log('template.deleted', Template::class, $id, ['name' => $name]);
+
+        return redirect()->back()->with('success', "Template [{$name}] berhasil dihapus.");
+    }
+
+    // ==================== CAMPAIGNS ====================
 
     public function campaigns(Request $request): Response
     {
@@ -55,7 +120,7 @@ class CampaignController extends Controller
         $workspaceId = session('current_workspace_id');
 
         $data = $request->validate([
-            'name' => ['required', 'string'],
+            'name' => ['required', 'string', 'max:255'],
             'channel_id' => ['required', 'exists:channels,id'],
             'template_id' => ['required', 'exists:templates,id'],
             'scheduled_at' => ['nullable', 'date'],
@@ -73,6 +138,38 @@ class CampaignController extends Controller
 
         AuditLog::log('campaign.created', Campaign::class, $campaign->id, ['name' => $campaign->name]);
 
-        return redirect()->back()->with('success', "Campaign [{$campaign->name}] berhasil dijadwalkan.");
+        return redirect()->back()->with('success', "Kampanye [{$campaign->name}] berhasil dijadwalkan.");
+    }
+
+    public function updateCampaign(Request $request, int $id)
+    {
+        $workspaceId = session('current_workspace_id');
+        $campaign = Campaign::where('workspace_id', $workspaceId)->findOrFail($id);
+
+        $data = $request->validate([
+            'name' => ['required', 'string', 'max:255'],
+            'channel_id' => ['required', 'exists:channels,id'],
+            'template_id' => ['required', 'exists:templates,id'],
+            'scheduled_at' => ['nullable', 'date'],
+            'status' => ['nullable', 'in:draft,scheduled,running,paused,completed,cancelled'],
+        ]);
+
+        $campaign->update($data);
+
+        AuditLog::log('campaign.updated', Campaign::class, $campaign->id, ['name' => $campaign->name]);
+
+        return redirect()->back()->with('success', "Kampanye [{$campaign->name}] berhasil diperbarui.");
+    }
+
+    public function deleteCampaign(int $id)
+    {
+        $workspaceId = session('current_workspace_id');
+        $campaign = Campaign::where('workspace_id', $workspaceId)->findOrFail($id);
+        $name = $campaign->name;
+        $campaign->delete();
+
+        AuditLog::log('campaign.deleted', Campaign::class, $id, ['name' => $name]);
+
+        return redirect()->back()->with('success', "Kampanye [{$name}] berhasil dihapus.");
     }
 }

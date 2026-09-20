@@ -169,4 +169,68 @@ class KnowledgeAndQuotationTest extends TestCase
         $this->assertEquals('approved', $rev1->status, 'Revision 1 remains immutable in history.');
         $this->assertNotEquals($rev1->grand_total, $rev2->grand_total);
     }
+
+    /**
+     * Test XLSX format template generation for Discount Matrix and Product Knowledge
+     */
+    public function test_discount_matrix_and_product_xlsx_template_downloads()
+    {
+        $responseMatrix = $this->actingAs($this->user)
+            ->withSession(['current_workspace_id' => $this->workspace->id])
+            ->get(route('knowledge.discount-matrices.template'));
+
+        $responseMatrix->assertStatus(200);
+        $responseMatrix->assertHeader('Content-Type', 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet');
+        $this->assertStringContainsString('template_matriks_diskon_agustus_2026.xlsx', $responseMatrix->headers->get('Content-Disposition'));
+        // Verify valid ZIP/XLSX magic bytes (PK\x03\x04)
+        $this->assertStringStartsWith("PK\x03\x04", $responseMatrix->getContent());
+
+        $responseProduct = $this->actingAs($this->user)
+            ->withSession(['current_workspace_id' => $this->workspace->id])
+            ->get(route('knowledge.products.template'));
+
+        $responseProduct->assertStatus(200);
+        $responseProduct->assertHeader('Content-Type', 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet');
+        $this->assertStringContainsString('template_katalog_produk_aiwa.xlsx', $responseProduct->headers->get('Content-Disposition'));
+        $this->assertStringStartsWith("PK\x03\x04", $responseProduct->getContent());
+    }
+
+    /**
+     * Test importing discount matrix from an actual .xlsx file
+     */
+    public function test_import_discount_matrix_from_real_xlsx_file()
+    {
+        $service = new \App\Domain\Knowledge\ProductKnowledgeService();
+        $xlsxBinary = $service->generateDiscountMatrixXlsxTemplate();
+
+        $tempPath = tempnam(sys_get_temp_dir(), 'test_matrix_') . '.xlsx';
+        file_put_contents($tempPath, $xlsxBinary);
+
+        $uploadedFile = new \Illuminate\Http\UploadedFile(
+            $tempPath,
+            'template_matriks_diskon_agustus_2026.xlsx',
+            'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
+            null,
+            true
+        );
+
+        $response = $this->actingAs($this->user)
+            ->withSession(['current_workspace_id' => $this->workspace->id])
+            ->post(route('knowledge.discount-matrices.import'), [
+                'file' => $uploadedFile,
+            ]);
+
+        $response->assertRedirect();
+        $response->assertSessionHas('success');
+
+        // Check database records created from XLSX
+        $domae = \App\Models\BrandDiscountMatrix::where('workspace_id', $this->workspace->id)
+            ->where('series_type', 'Domae')
+            ->first();
+        $this->assertNotNull($domae);
+        $this->assertEquals(25.0, (float) $domae->standard_discount_pct);
+        $this->assertEquals(34.0, (float) $domae->khusus_discount_pct);
+
+        @unlink($tempPath);
+    }
 }

@@ -1,5 +1,8 @@
 # Panduan Setup Integrasi WhatsApp Resmi (WABA & Cloud API)
 
+> 📘 **Panduan Langkah-demi-Langkah Lengkap:**  
+> Untuk panduan registrasi Meta App, verifikasi nomor nyata, pembuatan System User Token permanen, dan setup Webhook di portal Meta for Developers, lihat **[Panduan Lengkap Meta Developer Setup](META_DEVELOPER_SETUP.md)**.
+
 Aplikasi **ATS AI Sales Workspace** dirancang untuk bekerja langsung dengan WhatsApp Business API resmi (Meta Cloud API) serta dilengkapi Fake Sandbox Provider berlabel `DEMO` untuk lingkungan staging, CI/CD, dan simulasi tanpa risiko pengiriman pesan live.
 
 ---

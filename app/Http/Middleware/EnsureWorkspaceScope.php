@@ -14,9 +14,15 @@ class EnsureWorkspaceScope
         if ($user) {
             $workspaceId = session('current_workspace_id');
             if (!$workspaceId) {
-                $workspace = $user->workspaces()->first();
+                $workspace = $user->workspaces()->first()
+                    ?? ($user->current_workspace_id ? \App\Models\Workspace::find($user->current_workspace_id) : null)
+                    ?? \App\Models\Workspace::first();
                 if ($workspace) {
                     session(['current_workspace_id' => $workspace->id]);
+                    if (!$user->current_workspace_id) {
+                        $user->current_workspace_id = $workspace->id;
+                        $user->save();
+                    }
                 }
             }
         }

@@ -39,7 +39,7 @@ class InboxController extends Controller
             ->orderBy('last_message_at', 'desc')
             ->get()
             ->map(function ($c) {
-                $lastMsg = $c->messages()->latest()->first();
+                $lastMsg = $c->messages()->latest('id')->first();
                 return [
                     'id' => $c->id,
                     'contact_name' => $c->contact->name,
@@ -53,6 +53,8 @@ class InboxController extends Controller
                     'negotiation_state' => $c->negotiation_state,
                     'unread_count' => $c->unread_count,
                     'last_message' => $lastMsg?->content,
+                    'last_message_state' => $lastMsg?->state,
+                    'last_message_direction' => $lastMsg?->direction,
                     'last_message_time' => $c->last_message_at?->diffForHumans(),
                     'is_within_window' => $c->isWithinCustomerWindow(),
                     'assigned_to' => $c->assignedUser?->name,
@@ -80,35 +82,57 @@ class InboxController extends Controller
         }
 
         if ($convModel) {
-                // Clear unread count on open
-                if ($convModel->unread_count > 0) {
-                    $convModel->unread_count = 0;
-                    $convModel->save();
-                }
-
-                $activeConversation = [
-                    'id' => $convModel->id,
-                    'contact' => $convModel->contact,
-                    'channel' => $convModel->channel,
-                    'lifecycle' => $convModel->lifecycle,
-                    'control_owner' => $convModel->control_owner,
-                    'sales_stage' => $convModel->sales_stage,
-                    'intent_score' => $convModel->intent_score,
-                    'intent_band' => $convModel->intent_band,
-                    'negotiation_state' => $convModel->negotiation_state,
-                    'handoff_state' => $convModel->handoff_state,
-                    'handoff_reasons' => $convModel->handoff_reasons ?? [],
-                    'is_within_window' => $convModel->isWithinCustomerWindow(),
-                    'last_customer_message_at' => $convModel->last_customer_message_at?->format('d M Y H:i'),
-                    'assigned_user' => $convModel->assignedUser,
-                    'control_epoch' => $convModel->control_epoch,
-                ];
-
-                $messages = $convModel->messages()->get();
-                $internalNotes = $convModel->internalNotes()->with('user')->get();
-                $handoverBrief = $convModel->handoverBrief;
-                $activeQuote = $convModel->quotes()->with('currentRevision.lines')->latest()->first();
+            // Clear unread count on open
+            if ($convModel->unread_count > 0) {
+                $convModel->unread_count = 0;
+                $convModel->save();
             }
+
+            // Mark unread inbounds as read on Meta Cloud API
+            if ($convModel->channel && ($convModel->channel->provider === 'meta' || !empty($convModel->channel->secret_reference))) {
+                $unreadInbounds = $convModel->messages()
+                    ->where('direction', 'inbound')
+                    ->whereNotNull('provider_message_id')
+                    ->where('state', '!=', 'read')
+                    ->get();
+
+                if ($unreadInbounds->isNotEmpty()) {
+                    $metaProvider = new \App\Domain\Messaging\Providers\MetaCloudApiProvider();
+                    foreach ($unreadInbounds as $inboundMsg) {
+                        try {
+                            $metaProvider->markAsRead($convModel->channel, $inboundMsg->provider_message_id);
+                            $inboundMsg->state = 'read';
+                            $inboundMsg->save();
+                        } catch (\Throwable $e) {
+                            // ignore
+                        }
+                    }
+                }
+            }
+
+            $activeConversation = [
+                'id' => $convModel->id,
+                'contact' => $convModel->contact,
+                'channel' => $convModel->channel,
+                'lifecycle' => $convModel->lifecycle,
+                'control_owner' => $convModel->control_owner,
+                'sales_stage' => $convModel->sales_stage,
+                'intent_score' => $convModel->intent_score,
+                'intent_band' => $convModel->intent_band,
+                'negotiation_state' => $convModel->negotiation_state,
+                'handoff_state' => $convModel->handoff_state,
+                'handoff_reasons' => $convModel->handoff_reasons ?? [],
+                'is_within_window' => $convModel->isWithinCustomerWindow(),
+                'last_customer_message_at' => $convModel->last_customer_message_at?->format('d M Y H:i'),
+                'assigned_user' => $convModel->assignedUser,
+                'control_epoch' => $convModel->control_epoch,
+            ];
+
+            $messages = $convModel->messages()->get();
+            $internalNotes = $convModel->internalNotes()->with('user')->get();
+            $handoverBrief = $convModel->handoverBrief;
+            $activeQuote = $convModel->quotes()->with('currentRevision.lines')->latest()->first();
+        }
 
         $products = Product::where('workspace_id', $workspaceId)->where('is_active', true)->get();
 
@@ -155,12 +179,27 @@ class InboxController extends Controller
             'sender_id' => $request->user()->id,
             'kind' => $kind,
             'content' => $data['content'],
-            'state' => 'delivered',
+            'state' => 'sent',
             'control_epoch_snapshot' => $conversation->control_epoch,
         ]);
 
         $conversation->last_message_at = now();
         $conversation->save();
+
+        // Dispatch to real WhatsApp Cloud API if channel is Meta
+        if ($conversation->channel->provider === 'meta' || !empty($conversation->channel->secret_reference)) {
+            try {
+                $metaProvider = new \App\Domain\Messaging\Providers\MetaCloudApiProvider();
+                $res = $metaProvider->sendText($conversation->channel, $conversation->contact->phone_e164, $data['content']);
+                if (!empty($res['provider_message_id'])) {
+                    $message->provider_message_id = $res['provider_message_id'];
+                    $message->state = $res['status'] ?? 'sent';
+                    $message->save();
+                }
+            } catch (\Throwable $e) {
+                \Log::error('Failed to send Meta Cloud API message from human inbox: ' . $e->getMessage());
+            }
+        }
 
         return response()->json([
             'success' => true,

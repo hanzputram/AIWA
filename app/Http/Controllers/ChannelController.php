@@ -59,6 +59,7 @@ class ChannelController extends Controller
             'provider' => ['required', 'in:meta,fake_sandbox'],
             'waba_id' => ['nullable', 'string'],
             'phone_number_id' => ['nullable', 'string'],
+            'secret_reference' => ['nullable', 'string'],
             'ai_mode' => ['required', 'in:off,assist,autonomous'],
             'primary_human_id' => ['nullable', 'exists:users,id'],
             'backup_team_id' => ['nullable', 'exists:teams,id'],
@@ -80,6 +81,44 @@ class ChannelController extends Controller
         AuditLog::log('channel.created', Channel::class, $channel->id, ['name' => $channel->name]);
 
         return redirect()->back()->with('success', "Nomor WhatsApp [{$channel->name}] berhasil ditambahkan.");
+    }
+
+    public function update(Request $request, int $id)
+    {
+        $workspaceId = session('current_workspace_id');
+        $channel = Channel::where('workspace_id', $workspaceId)->findOrFail($id);
+
+        $data = $request->validate([
+            'name' => ['required', 'string', 'max:255'],
+            'phone_e164' => ['required', 'string', 'max:30'],
+            'display_number' => ['nullable', 'string', 'max:50'],
+            'branch' => ['nullable', 'string', 'max:100'],
+            'provider' => ['required', 'in:meta,fake_sandbox'],
+            'waba_id' => ['nullable', 'string'],
+            'phone_number_id' => ['nullable', 'string'],
+            'secret_reference' => ['nullable', 'string'],
+            'ai_mode' => ['required', 'in:off,assist,autonomous'],
+            'primary_human_id' => ['nullable', 'exists:users,id'],
+            'backup_team_id' => ['nullable', 'exists:teams,id'],
+        ]);
+
+        $channel->update($data);
+
+        AuditLog::log('channel.updated', Channel::class, $channel->id, ['name' => $channel->name]);
+
+        return redirect()->back()->with('success', "Nomor WhatsApp [{$channel->name}] berhasil diperbarui.");
+    }
+
+    public function destroy(int $id)
+    {
+        $workspaceId = session('current_workspace_id');
+        $channel = Channel::where('workspace_id', $workspaceId)->findOrFail($id);
+        $name = $channel->name;
+        $channel->delete();
+
+        AuditLog::log('channel.deleted', Channel::class, $id, ['name' => $name]);
+
+        return redirect()->back()->with('success', "Nomor WhatsApp [{$name}] berhasil dihapus.");
     }
 
     public function updateAiMode(Request $request, int $id)

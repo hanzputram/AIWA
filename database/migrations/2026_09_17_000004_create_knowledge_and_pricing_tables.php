@@ -113,6 +113,7 @@ return new class extends Migration
             $table->json('working_hours')->nullable();
             $table->string('website')->nullable();
             $table->json('portfolio_highlights')->nullable();
+            $table->string('source_document_name')->nullable();
             $table->json('provenance')->nullable();
             $table->text('raw_extracted_text')->nullable();
             $table->boolean('is_approved')->default(false);
