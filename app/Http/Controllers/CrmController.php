@@ -277,13 +277,34 @@ class CrmController extends Controller
         $contact = Contact::where('workspace_id', $workspaceId)->findOrFail($id);
 
         $data = $request->validate([
-            'name' => ['required', 'string', 'max:255'],
+            'name' => ['nullable', 'string', 'max:255'],
+            'phone_e164' => ['nullable', 'string', 'max:50'],
         ]);
 
-        $contact->name = $data['name'];
+        if (isset($data['name']) && trim($data['name']) !== '') {
+            $contact->name = trim($data['name']);
+        }
+
+        if (!empty($data['phone_e164'])) {
+            $rawPhone = trim($data['phone_e164']);
+            $normalized = Contact::normalizePhone($rawPhone);
+            
+            $custom = $contact->custom_fields ?? [];
+            // Preserve the original WhatsApp Multi-Device LID for message delivery
+            if (empty($custom['remote_jid']) && (str_starts_with($contact->phone_e164, '+15') || strlen($contact->phone_e164) >= 15)) {
+                $custom['remote_jid'] = ltrim($contact->phone_e164, '+') . '@lid';
+            }
+            $custom['real_phone'] = $normalized;
+            $contact->custom_fields = $custom;
+            $contact->phone_e164 = $normalized;
+        }
+
         $contact->save();
 
-        AuditLog::log('contact.quick_updated', Contact::class, $contact->id, ['name' => $contact->name]);
+        AuditLog::log('contact.quick_updated', Contact::class, $contact->id, [
+            'name' => $contact->name,
+            'phone' => $contact->phone_e164,
+        ]);
 
         return response()->json([
             'success' => true,

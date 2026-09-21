@@ -20,7 +20,8 @@ class AuthController extends Controller
 
     public function login(Request $request)
     {
-        $loginInput = trim($request->input('username') ?? $request->input('email') ?? '');
+        $rawInput = trim($request->input('username') ?? $request->input('email') ?? '');
+        $loginInput = strtolower(ltrim($rawInput, '@'));
         $password = (string) $request->input('password');
 
         if (empty($loginInput) || empty($password)) {
@@ -29,8 +30,8 @@ class AuthController extends Controller
             ])->onlyInput('username');
         }
 
-        $user = \App\Models\User::where('username', $loginInput)
-            ->orWhere('email', $loginInput)
+        $user = \App\Models\User::whereRaw('LOWER(username) = ?', [$loginInput])
+            ->orWhereRaw('LOWER(email) = ?', [$loginInput])
             ->first();
 
         if ($user && \Illuminate\Support\Facades\Hash::check($password, $user->password)) {

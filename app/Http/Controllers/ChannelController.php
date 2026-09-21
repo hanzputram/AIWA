@@ -56,7 +56,7 @@ class ChannelController extends Controller
             'phone_e164' => ['required', 'string', 'max:30'],
             'display_number' => ['nullable', 'string', 'max:50'],
             'branch' => ['nullable', 'string', 'max:100'],
-            'provider' => ['required', 'in:meta,fake_sandbox'],
+            'provider' => ['required', 'in:baileys,meta,fake_sandbox'],
             'waba_id' => ['nullable', 'string'],
             'phone_number_id' => ['nullable', 'string'],
             'secret_reference' => ['nullable', 'string'],
@@ -65,11 +65,12 @@ class ChannelController extends Controller
             'backup_team_id' => ['nullable', 'exists:teams,id'],
         ]);
 
-        $hasCredentials = !empty($data['waba_id']) && !empty($data['phone_number_id']);
         $status = 'draft';
         if ($data['provider'] === 'fake_sandbox') {
             $status = 'connected';
-        } elseif ($hasCredentials) {
+        } elseif ($data['provider'] === 'baileys') {
+            $status = 'draft';
+        } elseif (!empty($data['waba_id']) && !empty($data['phone_number_id'])) {
             $status = 'connecting';
         }
 
@@ -77,6 +78,22 @@ class ChannelController extends Controller
             'workspace_id' => $workspaceId,
             'connection_status' => $status,
         ]));
+
+        // Auto-bind AI Agent Profile, PriceBook, and DiscountPolicy if available
+        $profile = AgentProfile::where('workspace_id', $workspaceId)->first();
+        if ($profile) {
+            ChannelAgentBinding::firstOrCreate(
+                ['channel_id' => $channel->id],
+                [
+                    'agent_profile_id' => $profile->id,
+                    'price_book_id' => PriceBook::where('workspace_id', $workspaceId)->value('id'),
+                    'discount_policy_id' => DiscountPolicy::where('workspace_id', $workspaceId)->value('id'),
+                    'active_release_id' => KnowledgeRelease::where('workspace_id', $workspaceId)->value('id'),
+                    'primary_human_id' => $data['primary_human_id'] ?? null,
+                    'backup_team_id' => $data['backup_team_id'] ?? null,
+                ]
+            );
+        }
 
         AuditLog::log('channel.created', Channel::class, $channel->id, ['name' => $channel->name]);
 
@@ -93,7 +110,7 @@ class ChannelController extends Controller
             'phone_e164' => ['required', 'string', 'max:30'],
             'display_number' => ['nullable', 'string', 'max:50'],
             'branch' => ['nullable', 'string', 'max:100'],
-            'provider' => ['required', 'in:meta,fake_sandbox'],
+            'provider' => ['required', 'in:baileys,meta,fake_sandbox'],
             'waba_id' => ['nullable', 'string'],
             'phone_number_id' => ['nullable', 'string'],
             'secret_reference' => ['nullable', 'string'],
@@ -194,6 +211,75 @@ class ChannelController extends Controller
             'success' => true,
             'conversation_id' => $conversation->id,
             'orchestrator_result' => $result,
+        ]);
+    }
+
+    /**
+     * Start Baileys session and fetch initial QR code
+     */
+    public function connectBaileys(Request $request, int $id, \App\Domain\Messaging\Providers\BaileysProvider $baileysProvider)
+    {
+        $workspaceId = session('current_workspace_id');
+        $channel = Channel::where('workspace_id', $workspaceId)->findOrFail($id);
+
+        $result = $baileysProvider->startSession($channel);
+
+        if (!empty($result['status']) && $result['status'] === 'connected') {
+            $channel->connection_status = 'connected';
+            $channel->save();
+        }
+
+        return response()->json($result);
+    }
+
+    /**
+     * Poll live status & QR code of Baileys session
+     */
+    public function baileysStatus(int $id, \App\Domain\Messaging\Providers\BaileysProvider $baileysProvider)
+    {
+        $workspaceId = session('current_workspace_id');
+        $channel = Channel::where('workspace_id', $workspaceId)->findOrFail($id);
+
+        $statusData = $baileysProvider->getSessionStatus($channel);
+
+        // Sync channel model status
+        if (($statusData['status'] ?? '') === 'connected' && $channel->connection_status !== 'connected') {
+            $channel->connection_status = 'connected';
+            $channel->save();
+        } elseif (($statusData['status'] ?? '') === 'disconnected' && $channel->connection_status === 'connected') {
+            $channel->connection_status = 'disconnected';
+            $channel->save();
+        }
+
+        return response()->json([
+            'success' => true,
+            'channel_id' => $channel->id,
+            'connection_status' => $channel->connection_status,
+            'baileys_status' => $statusData['status'] ?? 'offline',
+            'qr' => $statusData['qr'] ?? null,
+            'user_phone' => $statusData['userPhone'] ?? null,
+        ]);
+    }
+
+    /**
+     * Logout and disconnect Baileys session
+     */
+    public function disconnectBaileys(int $id, \App\Domain\Messaging\Providers\BaileysProvider $baileysProvider)
+    {
+        $workspaceId = session('current_workspace_id');
+        $channel = Channel::where('workspace_id', $workspaceId)->findOrFail($id);
+
+        $result = $baileysProvider->logoutSession($channel);
+
+        $channel->connection_status = 'disconnected';
+        $channel->save();
+
+        AuditLog::log('channel.disconnected', Channel::class, $channel->id, ['name' => $channel->name]);
+
+        return response()->json([
+            'success' => true,
+            'message' => "Nomor WhatsApp [{$channel->name}] berhasil diputuskan.",
+            'result' => $result,
         ]);
     }
 }

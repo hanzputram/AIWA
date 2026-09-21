@@ -10,7 +10,8 @@ Aplikasi internal enterprise untuk mengelola multi-nomor WhatsApp bisnis, melaya
 ## 1. Fitur Utama Rilis Inti
 
 1. **Multi-Number WhatsApp Bisnis (`/app/numbers`):**
-   - Mendukung banyak nomor WhatsApp resmi (Meta Cloud API) dan Fake Sandbox Provider (`DEMO`).
+   - **WhatsApp Multi-Device (Baileys QR Code — Default):** Hubungkan nomor WhatsApp fisik Anda (nomor pribadi atau WhatsApp Business) langsung dari ponsel hanya dengan **Scan QR Code** (*Linked Devices*), tanpa perlu mendaftar di Meta for Developer, tanpa WABA ID, dan tanpa biaya pesan percakapan Meta.
+   - Mendukung Fake Sandbox Provider (`DEMO`) untuk simulasi tanpa kuota, serta Meta Cloud API opsional.
    - Konfigurasi persona AI, mode (`off`, `assist`, `autonomous`), jam operasional, dan alokasi Manusia Utama serta Tim Backup per nomor.
    - Dilengkapi *Sandbox Simulasi Chat* untuk menguji persona dan harga sebelum live.
 
@@ -92,10 +93,18 @@ php artisan migrate:fresh --seed
 # 5. Build aset antarmuka
 npm run build
 
-# 6. Jalankan server lokal
+# 6. Jalankan server lokal Laravel
 php artisan serve
+
+# 7. Jalankan microservice WhatsApp Baileys (di terminal terpisah)
+npm run baileys
 ```
 Aplikasi dapat diakses melalui browser di `http://127.0.0.1:8000/`.
+Untuk menautkan nomor WhatsApp Anda:
+1. Buka menu **Nomor WhatsApp (`/app/numbers`)**.
+2. Klik tombol **"Scan QR WA"** pada nomor yang terdaftar.
+3. Buka WhatsApp di smartphone Anda > **Perangkat Tertaut (Linked Devices)** > **Tautkan Perangkat**, lalu pindai QR Code di layar.
+4. WhatsApp akan otomatis terhubung dan AI Sales langsung aktif melayani pesan pelanggan!
 
 ---
 

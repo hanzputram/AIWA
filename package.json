@@ -4,7 +4,8 @@
     "type": "module",
     "scripts": {
         "build": "vite build",
-        "dev": "vite"
+        "dev": "vite",
+        "baileys": "node baileys-service/server.js"
     },
     "dependencies": {
         "@inertiajs/react": "^2.0.3",

@@ -57,4 +57,38 @@ class InternalRouteTest extends TestCase
         $response = $this->get('/login');
         $response->assertOk();
     }
+
+    /**
+     * Test login supports case-insensitivity and @ prefix
+     */
+    public function test_login_supports_case_insensitivity_and_at_prefix()
+    {
+        $this->withoutMiddleware();
+
+        $workspace = Workspace::create([
+            'name' => 'ATS Electrical',
+            'slug' => 'ats-electrical',
+        ]);
+
+        $user = User::create([
+            'name' => 'Admin Sistem',
+            'username' => 'admin',
+            'email' => 'admin@ats.co.id',
+            'password' => bcrypt('password'),
+        ]);
+
+        // Login with uppercase "Admin"
+        $res1 = $this->post('/login', [
+            'username' => 'Admin',
+            'password' => 'password',
+        ]);
+        $res1->assertRedirect('/app/dashboard');
+
+        // Login with "@admin"
+        $res2 = $this->post('/login', [
+            'username' => '@admin',
+            'password' => 'password',
+        ]);
+        $res2->assertRedirect('/app/dashboard');
+    }
 }

@@ -57,7 +57,7 @@ class WebhookController extends Controller
             'payload' => $payload
         ]);
 
-        if ($signature && $appSecret && $appSecret !== 'test_secret_meta_123') {
+        if ($signature && $appSecret) {
             $expectedSignature = 'sha256=' . hash_hmac('sha256', $rawContent, $appSecret);
             if (!hash_equals($expectedSignature, $signature)) {
                 \Log::warning('Meta Webhook Invalid signature rejected');
@@ -127,5 +127,140 @@ class WebhookController extends Controller
         $delivery->save();
 
         return response()->json(['status' => 'success'], 200);
+    }
+
+    /**
+     * Inbound Baileys Multi-Device Webhook Processing (POST)
+     */
+    public function handleBaileys(Request $request)
+    {
+        $payload = $request->all();
+        \Log::info('Baileys Webhook received', ['payload' => $payload]);
+
+        $event = $payload['event'] ?? 'inbound_message';
+        $sessionId = $payload['sessionId'] ?? '';
+
+        // Extract channel ID from sessionId "channel_{id}"
+        $channelId = null;
+        if (preg_match('/channel_(\d+)/', $sessionId, $matches)) {
+            $channelId = (int)$matches[1];
+        }
+
+        $channel = $channelId ? Channel::find($channelId) : Channel::where('provider', 'baileys')->first();
+        if (!$channel) {
+            $channel = Channel::first();
+        }
+
+        if (!$channel) {
+            return response()->json(['error' => 'No active channel found'], 404);
+        }
+
+        if ($event === 'session_connected') {
+            $channel->connection_status = 'connected';
+            if (!empty($payload['userPhone']) && empty($channel->display_number)) {
+                $channel->display_number = '+' . ltrim($payload['userPhone'], '+');
+            }
+            $channel->save();
+            return response()->json(['status' => 'connected_acknowledged']);
+        }
+
+        if ($event === 'inbound_message') {
+            $providerMsgId = $payload['messageId'] ?? null;
+
+            // Deduplicate provider_message_id
+            if ($providerMsgId && \App\Models\Message::where('provider_message_id', $providerMsgId)->exists()) {
+                return response()->json(['status' => 'already_processed']);
+            }
+
+            $rawFrom = $payload['fromPhone'] ?? '';
+            $normalizedPhone = Contact::normalizePhone($rawFrom);
+            $pushName = trim($payload['pushName'] ?? '');
+            $remoteJid = $payload['remoteJid'] ?? '';
+
+            // Strictly ignore group messages, channels/newsletters, and broadcasts
+            if (
+                str_ends_with($remoteJid, '@g.us') ||
+                str_contains($remoteJid, '@g.us') ||
+                str_ends_with($remoteJid, '@newsletter') ||
+                str_contains($remoteJid, '@broadcast')
+            ) {
+                return response()->json(['status' => 'ignored_group_message']);
+            }
+
+            $realPhone = !empty($payload['realPhone']) ? Contact::normalizePhone($payload['realPhone']) : null;
+
+            // Preferred phone for contact record
+            $finalPhone = $realPhone ?: $normalizedPhone;
+            $contactName = $pushName ?: ($realPhone ?: $normalizedPhone);
+
+            // Find existing contact by phone or remote_jid
+            $contact = Contact::where('workspace_id', $channel->workspace_id)
+                ->where(function ($q) use ($normalizedPhone, $realPhone, $remoteJid) {
+                    $q->where('phone_e164', $normalizedPhone);
+                    if ($realPhone) {
+                        $q->orWhere('phone_e164', $realPhone);
+                    }
+                    if ($remoteJid) {
+                        $q->orWhere('custom_fields->remote_jid', $remoteJid);
+                    }
+                })
+                ->first();
+
+            if (!$contact) {
+                $contact = Contact::create([
+                    'workspace_id' => $channel->workspace_id,
+                    'phone_e164' => $finalPhone,
+                    'name' => $contactName,
+                    'custom_fields' => array_filter([
+                        'remote_jid' => $remoteJid,
+                        'push_name' => $pushName,
+                        'real_phone' => $realPhone,
+                    ]),
+                ]);
+            } else {
+                $custom = $contact->custom_fields ?? [];
+                $changed = false;
+                if ($pushName && (str_starts_with($contact->name, 'Pelanggan ') || empty($contact->name))) {
+                    $contact->name = $pushName;
+                    $changed = true;
+                }
+                if ($remoteJid && ($custom['remote_jid'] ?? '') !== $remoteJid) {
+                    $custom['remote_jid'] = $remoteJid;
+                    $changed = true;
+                }
+                if ($realPhone) {
+                    $custom['real_phone'] = $realPhone;
+                    if (str_starts_with($contact->phone_e164, '+15') && strlen($contact->phone_e164) >= 15) {
+                        $contact->phone_e164 = $realPhone;
+                    }
+                    $changed = true;
+                }
+                if ($changed) {
+                    $contact->custom_fields = $custom;
+                    $contact->save();
+                }
+            }
+
+            $conversation = Conversation::firstOrCreate(
+                [
+                    'workspace_id' => $channel->workspace_id,
+                    'channel_id' => $channel->id,
+                    'contact_id' => $contact->id,
+                ],
+                [
+                    'control_owner' => $channel->ai_mode === 'autonomous' ? 'ai_active' : 'human_active',
+                    'control_epoch' => 1,
+                ]
+            );
+
+            $text = $payload['text'] ?? '';
+            if (!empty($text)) {
+                $this->orchestrator->handleInboundMessage($conversation, $text, $providerMsgId);
+            }
+
+            return response()->json(['status' => 'processed']);
+        }
+
+        return response()->json(['status' => 'ignored']);
     }
 }

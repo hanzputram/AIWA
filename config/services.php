@@ -42,4 +42,14 @@ return [
         'version' => env('META_GRAPH_VERSION', 'v21.0'),
     ],
 
+    'baileys' => [
+        'url' => env('BAILEYS_SERVICE_URL', 'http://127.0.0.1:3000'),
+        'secret' => env('BAILEYS_SECRET', 'ats_baileys_secret_2026'),
+    ],
+
+    'gemini' => [
+        'api_key' => env('GEMINI_API_KEY'),
+        'model' => env('GEMINI_MODEL', 'gemini-3.6-flash'),
+    ],
+
 ];

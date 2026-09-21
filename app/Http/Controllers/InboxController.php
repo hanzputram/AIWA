@@ -186,18 +186,22 @@ class InboxController extends Controller
         $conversation->last_message_at = now();
         $conversation->save();
 
-        // Dispatch to real WhatsApp Cloud API if channel is Meta
-        if ($conversation->channel->provider === 'meta' || !empty($conversation->channel->secret_reference)) {
+        // Dispatch to real WhatsApp provider (Baileys / Meta)
+        if ($conversation->channel->provider !== 'fake_sandbox') {
             try {
-                $metaProvider = new \App\Domain\Messaging\Providers\MetaCloudApiProvider();
-                $res = $metaProvider->sendText($conversation->channel, $conversation->contact->phone_e164, $data['content']);
+                $provider = \App\Domain\Messaging\MessagingProviderFactory::make($conversation->channel);
+                $metadata = [];
+                if (!empty($conversation->contact->custom_fields['remote_jid'])) {
+                    $metadata['remote_jid'] = $conversation->contact->custom_fields['remote_jid'];
+                }
+                $res = $provider->sendText($conversation->channel, $conversation->contact->phone_e164, $data['content'], $metadata);
                 if (!empty($res['provider_message_id'])) {
                     $message->provider_message_id = $res['provider_message_id'];
                     $message->state = $res['status'] ?? 'sent';
                     $message->save();
                 }
             } catch (\Throwable $e) {
-                \Log::error('Failed to send Meta Cloud API message from human inbox: ' . $e->getMessage());
+                \Log::error('Failed to send WhatsApp message from human inbox: ' . $e->getMessage());
             }
         }
 

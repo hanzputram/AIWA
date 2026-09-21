@@ -40,6 +40,8 @@ Route::get('/webhooks/meta', [WebhookController::class, 'verify']);
 Route::post('/webhooks/meta', [WebhookController::class, 'handle']);
 Route::get('/api/v1/webhooks/meta', [WebhookController::class, 'verify']);
 Route::post('/api/v1/webhooks/meta', [WebhookController::class, 'handle']);
+Route::post('/webhooks/baileys', [WebhookController::class, 'handleBaileys']);
+Route::post('/api/v1/webhooks/baileys', [WebhookController::class, 'handleBaileys']);
 
 // Authenticated Application Routes
 Route::middleware(['auth'])->prefix('app')->group(function () {
@@ -145,10 +147,13 @@ Route::middleware(['auth'])->prefix('app')->group(function () {
 
 // Internal Scoped API Endpoints
 Route::middleware(['auth'])->prefix('api/v1')->group(function () {
-    // Numbers
+    // Numbers & Baileys Connection
     Route::patch('/numbers/{id}/ai-mode', [ChannelController::class, 'updateAiMode']);
     Route::post('/numbers/{id}/emergency-pause', [ChannelController::class, 'toggleEmergencyPause']);
     Route::post('/numbers/{id}/simulate', [ChannelController::class, 'simulateInbound']);
+    Route::post('/numbers/{id}/baileys/connect', [ChannelController::class, 'connectBaileys']);
+    Route::get('/numbers/{id}/baileys/status', [ChannelController::class, 'baileysStatus']);
+    Route::post('/numbers/{id}/baileys/disconnect', [ChannelController::class, 'disconnectBaileys']);
 
     // Workspace Emergency Stop
     Route::post('/ai/emergency-stop', [TakeoverController::class, 'emergencyStop']);

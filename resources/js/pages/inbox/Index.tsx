@@ -65,19 +65,27 @@ export default function InboxIndex({
     const [releaseNotes, setReleaseNotes] = useState('');
     const [isEditingContact, setIsEditingContact] = useState(false);
     const [contactNameInput, setContactNameInput] = useState('');
+    const [contactPhoneInput, setContactPhoneInput] = useState('');
     const [savingContact, setSavingContact] = useState(false);
 
-    const handleSaveContactName = async () => {
-        if (!active_conversation?.contact || !contactNameInput.trim() || savingContact) return;
+    const isLid = (phone?: string) => {
+        if (!phone) return false;
+        const clean = phone.replace(/[^0-9]/g, '');
+        return clean.length >= 14 && !clean.startsWith('62');
+    };
+
+    const handleSaveContact = async () => {
+        if (!active_conversation?.contact || savingContact) return;
         setSavingContact(true);
         try {
             await (window as any).axios.patch(`/api/v1/contacts/${active_conversation.contact.id}`, {
-                name: contactNameInput.trim(),
+                name: contactNameInput.trim() || active_conversation.contact.name,
+                phone_e164: contactPhoneInput.trim(),
             });
             setIsEditingContact(false);
             router.reload();
         } catch (err) {
-            alert('Gagal memperbarui nama kontak');
+            alert('Gagal memperbarui info kontak');
         } finally {
             setSavingContact(false);
         }
@@ -317,9 +325,15 @@ export default function InboxIndex({
                                                 </div>
 
                                                 <div className="flex items-center gap-1.5 mt-0.5">
-                                                    <span className="text-[10.5px] text-slate-500 font-mono truncate">
-                                                        {conv.contact_phone}
-                                                    </span>
+                                                    {isLid(conv.contact_phone) ? (
+                                                        <span className="text-[10px] bg-amber-50 text-amber-700 border border-amber-200/70 px-1.5 py-0.2 rounded font-mono truncate" title={`ID WhatsApp: ${conv.contact_phone}`}>
+                                                            ID: {conv.contact_phone}
+                                                        </span>
+                                                    ) : (
+                                                        <span className="text-[10.5px] text-slate-500 font-mono truncate">
+                                                            {conv.contact_phone}
+                                                        </span>
+                                                    )}
                                                     <span className="text-[9px] bg-slate-100 text-slate-600 px-1.5 py-0.2 rounded font-medium shrink-0">
                                                         {conv.channel_name}
                                                     </span>
@@ -388,24 +402,31 @@ export default function InboxIndex({
                                     <div className="space-y-0.5">
                                         <div className="flex items-center gap-2">
                                             {isEditingContact ? (
-                                                <div className="flex items-center gap-1">
+                                                <div className="flex flex-wrap items-center gap-1.5 p-1.5 bg-slate-50 border border-indigo-200 rounded-xl shadow-xs">
                                                     <input
                                                         type="text"
                                                         value={contactNameInput}
                                                         onChange={(e) => setContactNameInput(e.target.value)}
-                                                        onKeyDown={(e) => {
-                                                            if (e.key === 'Enter') handleSaveContactName();
-                                                            if (e.key === 'Escape') setIsEditingContact(false);
-                                                        }}
-                                                        className="px-2.5 py-1 text-sm font-bold bg-white border border-indigo-400 rounded-lg focus:outline-hidden focus:ring-2 focus:ring-indigo-500 shadow-xs"
+                                                        className="px-2.5 py-1 text-xs font-semibold bg-white border border-slate-300 rounded-lg focus:outline-hidden focus:ring-2 focus:ring-indigo-500 w-36"
                                                         autoFocus
                                                         placeholder="Nama kontak..."
                                                     />
+                                                    <input
+                                                        type="text"
+                                                        value={contactPhoneInput}
+                                                        onChange={(e) => setContactPhoneInput(e.target.value)}
+                                                        onKeyDown={(e) => {
+                                                            if (e.key === 'Enter') handleSaveContact();
+                                                            if (e.key === 'Escape') setIsEditingContact(false);
+                                                        }}
+                                                        className="px-2.5 py-1 text-xs font-mono bg-white border border-slate-300 rounded-lg focus:outline-hidden focus:ring-2 focus:ring-indigo-500 w-36"
+                                                        placeholder="No HP (+628...)"
+                                                    />
                                                     <button
-                                                        onClick={handleSaveContactName}
+                                                        onClick={handleSaveContact}
                                                         disabled={savingContact}
                                                         className="p-1.5 bg-emerald-600 hover:bg-emerald-700 text-white rounded-md transition shadow-xs cursor-pointer"
-                                                        title="Simpan"
+                                                        title="Simpan Perubahan Kontak"
                                                     >
                                                         <Check className="w-3.5 h-3.5" />
                                                     </button>
@@ -418,35 +439,61 @@ export default function InboxIndex({
                                                     </button>
                                                 </div>
                                             ) : (
-                                                <div className="flex items-center gap-1.5 group">
-                                                    <h3 className="font-bold text-sm text-slate-900 flex items-center gap-1.5">
-                                                        <span>{active_conversation.contact?.name || 'Pelanggan'}</span>
-                                                    </h3>
-                                                    <button
-                                                        onClick={() => {
-                                                            setContactNameInput(active_conversation.contact?.name || '');
-                                                            setIsEditingContact(true);
-                                                        }}
-                                                        className="p-1 text-slate-400 hover:text-indigo-600 hover:bg-indigo-50 rounded-md transition cursor-pointer"
-                                                        title="Ubah Nama Kontak"
-                                                    >
-                                                        <Pencil className="w-3.5 h-3.5" />
-                                                    </button>
+                                                <div className="flex items-center gap-2 flex-wrap">
+                                                    <div className="flex items-center gap-1.5 group">
+                                                        <h3 className="font-bold text-sm text-slate-900 flex items-center gap-1.5">
+                                                            <span>{active_conversation.contact?.name || 'Pelanggan'}</span>
+                                                        </h3>
+                                                    </div>
+
+                                                    {isLid(active_conversation.contact?.phone_e164) ? (
+                                                        <div className="flex items-center gap-1.5">
+                                                            <span className="text-[10px] bg-amber-50 text-amber-700 border border-amber-200 px-1.5 py-0.5 rounded font-mono" title={`ID WhatsApp: ${active_conversation.contact?.phone_e164}`}>
+                                                                ID: {active_conversation.contact?.phone_e164}
+                                                            </span>
+                                                            <button
+                                                                onClick={() => {
+                                                                    setContactNameInput(active_conversation.contact?.name || '');
+                                                                    setContactPhoneInput('');
+                                                                    setIsEditingContact(true);
+                                                                }}
+                                                                className="text-[11px] font-semibold text-indigo-600 hover:text-indigo-800 hover:underline flex items-center gap-1 cursor-pointer bg-indigo-50 px-2 py-0.5 rounded border border-indigo-200"
+                                                                title="Ubah ID ini menjadi nomor HP asli pelanggan"
+                                                            >
+                                                                <Pencil className="w-2.5 h-2.5" />
+                                                                <span>Set Nomor HP</span>
+                                                            </button>
+                                                        </div>
+                                                    ) : (
+                                                        <div className="flex items-center gap-1">
+                                                            <span className="text-xs text-slate-500 font-mono">
+                                                                ({active_conversation.contact?.phone_e164})
+                                                            </span>
+                                                            <button
+                                                                onClick={() => {
+                                                                    setContactNameInput(active_conversation.contact?.name || '');
+                                                                    setContactPhoneInput(active_conversation.contact?.phone_e164 || '');
+                                                                    setIsEditingContact(true);
+                                                                }}
+                                                                className="p-1 text-slate-400 hover:text-indigo-600 hover:bg-indigo-50 rounded-md transition cursor-pointer"
+                                                                title="Ubah Nama & Nomor HP"
+                                                            >
+                                                                <Pencil className="w-3.5 h-3.5" />
+                                                            </button>
+                                                            {active_conversation.contact?.phone_e164 && (
+                                                                <a
+                                                                    href={`https://wa.me/${active_conversation.contact.phone_e164.replace(/[^0-9]/g, '')}`}
+                                                                    target="_blank"
+                                                                    rel="noreferrer"
+                                                                    className="p-1 text-slate-400 hover:text-emerald-600 hover:bg-emerald-50 rounded-md transition"
+                                                                    title="Buka Langsung di WhatsApp Web/App"
+                                                                >
+                                                                    <ExternalLink className="w-3.5 h-3.5" />
+                                                                </a>
+                                                            )}
+                                                        </div>
+                                                    )}
                                                 </div>
-                                            )}
-                                            <span className="text-xs text-slate-400 font-mono">
-                                                ({active_conversation.contact?.phone_e164})
-                                            </span>
-                                            {active_conversation.contact?.phone_e164 && (
-                                                <a
-                                                    href={`https://wa.me/${active_conversation.contact.phone_e164.replace(/[^0-9]/g, '')}`}
-                                                    target="_blank"
-                                                    rel="noreferrer"
-                                                    className="p-1 text-slate-400 hover:text-emerald-600 hover:bg-emerald-50 rounded-md transition"
-                                                    title="Buka Langsung di WhatsApp Web/App"
-                                                >
-                                                    <ExternalLink className="w-3.5 h-3.5" />
-                                                </a>
                                             )}
                                         </div>
 

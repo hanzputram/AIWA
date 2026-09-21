@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import AppLayout from '../../layouts/AppLayout';
 import { Head, useForm, router } from '@inertiajs/react';
 import {
@@ -18,7 +18,13 @@ import {
     Radio,
     Sparkles,
     Settings2,
-    ShieldAlert
+    ShieldAlert,
+    QrCode,
+    Smartphone,
+    RefreshCw,
+    Unlink,
+    Check,
+    Loader2
 } from 'lucide-react';
 
 interface Props {
@@ -54,13 +60,22 @@ export default function NumbersIndex({
     const [simResult, setSimResult] = useState<any>(null);
     const [simLoading, setSimLoading] = useState(false);
 
+    // Baileys QR Code Modal States
+    const [qrModalOpen, setQrModalOpen] = useState(false);
+    const [qrChannel, setQrChannel] = useState<any>(null);
+    const [qrDataUrl, setQrDataUrl] = useState<string | null>(null);
+    const [qrStatus, setQrStatus] = useState<string>('connecting');
+    const [qrLoading, setQrLoading] = useState(false);
+    const [qrError, setQrError] = useState<string | null>(null);
+    const [connectedPhone, setConnectedPhone] = useState<string | null>(null);
+
     // Create Channel Form
     const createForm = useForm({
         name: '',
         phone_e164: '',
         display_number: '',
         branch: 'Jakarta Barat',
-        provider: 'fake_sandbox',
+        provider: 'baileys',
         waba_id: '',
         phone_number_id: '',
         secret_reference: '',
@@ -75,7 +90,7 @@ export default function NumbersIndex({
         phone_e164: '',
         display_number: '',
         branch: 'Jakarta Barat',
-        provider: 'fake_sandbox',
+        provider: 'baileys',
         waba_id: '',
         phone_number_id: '',
         secret_reference: '',
@@ -83,6 +98,94 @@ export default function NumbersIndex({
         primary_human_id: '',
         backup_team_id: '',
     });
+
+    const openQrModal = async (channel: any) => {
+        setQrChannel(channel);
+        setQrModalOpen(true);
+        setQrLoading(true);
+        setQrError(null);
+        setQrDataUrl(null);
+        setQrStatus('connecting');
+        setConnectedPhone(null);
+
+        try {
+            const res = await fetch(`/api/v1/numbers/${channel.id}/baileys/connect`, {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                    'Accept': 'application/json',
+                    'X-CSRF-TOKEN': (document.querySelector('meta[name="csrf-token"]') as HTMLMetaElement)?.content || '',
+                }
+            });
+            const data = await res.json();
+            if (data.qr) {
+                setQrDataUrl(data.qr);
+                setQrStatus('qr_ready');
+            }
+            if (data.status === 'connected') {
+                setQrStatus('connected');
+                setConnectedPhone(data.userPhone || channel.phone_e164);
+            }
+            if (data.error) {
+                setQrError(data.error);
+            }
+        } catch (err: any) {
+            setQrError('Tidak dapat terhubung ke Baileys service: ' + err.message);
+        } finally {
+            setQrLoading(false);
+        }
+    };
+
+    // Auto-polling for QR status while modal is open
+    useEffect(() => {
+        if (!qrModalOpen || !qrChannel || qrStatus === 'connected') return;
+
+        const interval = setInterval(async () => {
+            try {
+                const res = await fetch(`/api/v1/numbers/${qrChannel.id}/baileys/status`, {
+                    headers: { 'Accept': 'application/json' }
+                });
+                const data = await res.json();
+
+                if (data.qr) {
+                    setQrDataUrl(data.qr);
+                    setQrStatus('qr_ready');
+                }
+
+                if (data.connection_status === 'connected' || data.baileys_status === 'connected') {
+                    setQrStatus('connected');
+                    setConnectedPhone(data.user_phone || qrChannel.phone_e164);
+                    router.reload({ only: ['channels'] });
+                }
+            } catch (e) {
+                // ignore network hiccups during polling
+            }
+        }, 2000);
+
+        return () => clearInterval(interval);
+    }, [qrModalOpen, qrChannel, qrStatus]);
+
+    const handleDisconnectBaileys = async (channelId: number) => {
+        if (!confirm('Putuskan tautan WhatsApp dari sistem ini?')) return;
+        setQrLoading(true);
+        try {
+            await fetch(`/api/v1/numbers/${channelId}/baileys/disconnect`, {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                    'Accept': 'application/json',
+                    'X-CSRF-TOKEN': (document.querySelector('meta[name="csrf-token"]') as HTMLMetaElement)?.content || '',
+                }
+            });
+            setQrStatus('disconnected');
+            setQrDataUrl(null);
+            router.reload({ only: ['channels'] });
+        } catch (e: any) {
+            alert('Gagal memutuskan koneksi: ' + e.message);
+        } finally {
+            setQrLoading(false);
+        }
+    };
 
     const openEdit = (ch: any) => {
         setEditingChannel(ch);
@@ -284,7 +387,7 @@ export default function NumbersIndex({
                                                 {ch.connection_status.toUpperCase()}
                                             </span>
                                             <span className="text-[10px] font-medium px-2 py-0.5 rounded-md bg-slate-100 text-slate-600">
-                                                {ch.provider === 'meta' ? 'Meta Cloud API' : 'Sandbox DEMO'}
+                                                {ch.provider === 'baileys' ? 'WhatsApp Web (Baileys)' : ch.provider === 'meta' ? 'Meta Cloud API' : 'Sandbox DEMO'}
                                             </span>
                                         </div>
                                         <p className="text-xs text-slate-500 flex items-center gap-2 font-mono">
@@ -296,6 +399,21 @@ export default function NumbersIndex({
 
                                     {/* Action Buttons */}
                                     <div className="flex items-center gap-1.5">
+                                        {ch.provider === 'baileys' && (
+                                            <button
+                                                onClick={() => openQrModal(ch)}
+                                                className={`flex items-center gap-1.5 px-3 py-1.5 border rounded-xl text-xs font-semibold transition ${
+                                                    ch.connection_status === 'connected'
+                                                        ? 'bg-emerald-50 hover:bg-emerald-100 text-emerald-700 border-emerald-200'
+                                                        : 'bg-amber-50 hover:bg-amber-100 text-amber-700 border-amber-300 animate-pulse'
+                                                }`}
+                                                title="Tautkan WhatsApp (Scan QR Code)"
+                                            >
+                                                <QrCode className="w-3.5 h-3.5" />
+                                                <span>{ch.connection_status === 'connected' ? 'Status WA' : 'Scan QR WA'}</span>
+                                            </button>
+                                        )}
+
                                         <button
                                             onClick={() => {
                                                 setSelectedChannel(ch);
@@ -433,11 +551,24 @@ export default function NumbersIndex({
                                             onChange={(e) => createForm.setData('provider', e.target.value)}
                                             className="w-full bg-slate-50 border border-slate-200 rounded-xl px-3 py-2 text-slate-800 focus:outline-none focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-500"
                                         >
+                                            <option value="baileys">WhatsApp Web (Baileys QR Code — Rekomendasi)</option>
                                             <option value="fake_sandbox">Fake Sandbox (DEMO - Tanpa Kuota)</option>
-                                            <option value="meta">Meta Cloud API (Akun Resmi)</option>
+                                            <option value="meta">Meta Cloud API (Akun Resmi Facebook)</option>
                                         </select>
                                     </div>
                                 </div>
+
+                                {createForm.data.provider === 'baileys' && (
+                                    <div className="p-3.5 bg-emerald-50/80 rounded-xl border border-emerald-200 space-y-1.5">
+                                        <div className="flex items-center gap-2 text-emerald-800 font-bold text-xs">
+                                            <QrCode className="w-4 h-4 text-emerald-600" />
+                                            <span>WhatsApp Multi-Device (Baileys)</span>
+                                        </div>
+                                        <p className="text-[11px] text-emerald-700 leading-relaxed">
+                                            Tidak memerlukan akun Meta for Developer, WABA ID, atau biaya pesan template. Simpan nomor ini, lalu klik tombol <strong>"Scan QR WA"</strong> untuk memindai kode QR dari WhatsApp HP Anda.
+                                        </p>
+                                    </div>
+                                )}
 
                                 {createForm.data.provider === 'meta' && (
                                     <div className="p-3.5 bg-indigo-50/50 rounded-xl border border-indigo-100 space-y-3">
@@ -578,11 +709,24 @@ export default function NumbersIndex({
                                             onChange={(e) => editForm.setData('provider', e.target.value)}
                                             className="w-full bg-slate-50 border border-slate-200 rounded-xl px-3 py-2 text-slate-800 focus:outline-none focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-500"
                                         >
+                                            <option value="baileys">WhatsApp Web (Baileys QR Code)</option>
                                             <option value="fake_sandbox">Fake Sandbox (DEMO)</option>
                                             <option value="meta">Meta Cloud API (Official)</option>
                                         </select>
                                     </div>
                                 </div>
+
+                                {editForm.data.provider === 'baileys' && (
+                                    <div className="p-3.5 bg-emerald-50/80 rounded-xl border border-emerald-200 space-y-1">
+                                        <div className="flex items-center gap-2 text-emerald-800 font-bold text-xs">
+                                            <QrCode className="w-4 h-4 text-emerald-600" />
+                                            <span>WhatsApp Multi-Device (Baileys)</span>
+                                        </div>
+                                        <p className="text-[11px] text-emerald-700">
+                                            Nomor ini menggunakan koneksi Baileys Multi-Device. Anda dapat menghubungkan atau mengganti perangkat melalui tombol <strong>"Scan QR WA"</strong> di kartu nomor.
+                                        </p>
+                                    </div>
+                                )}
 
                                 {editForm.data.provider === 'meta' && (
                                     <div className="p-3.5 bg-indigo-50/50 rounded-xl border border-indigo-100 space-y-3">
@@ -807,6 +951,144 @@ export default function NumbersIndex({
                                             )}
                                         </div>
                                     </div>
+                                )}
+                            </div>
+                        </div>
+                    </div>
+                )}
+                {/* MODAL BAILEYS QR SCANNER */}
+                {qrModalOpen && qrChannel && (
+                    <div className="fixed inset-0 z-50 bg-black/50 backdrop-blur-xs flex items-center justify-center p-4 overflow-y-auto">
+                        <div className="bg-white border border-slate-200 rounded-3xl p-7 max-w-md w-full shadow-2xl space-y-5 my-8 relative animate-in fade-in zoom-in duration-150">
+                            {/* Header */}
+                            <div className="flex items-start justify-between border-b border-slate-100 pb-4">
+                                <div className="flex items-center gap-3">
+                                    <div className="w-10 h-10 rounded-2xl bg-emerald-50 text-emerald-600 flex items-center justify-center border border-emerald-100">
+                                        <QrCode className="w-5 h-5" />
+                                    </div>
+                                    <div>
+                                        <h3 className="font-bold text-slate-800 text-sm">Tautkan Perangkat WhatsApp</h3>
+                                        <p className="text-xs text-slate-400 font-mono mt-0.5">{qrChannel.name} · {qrChannel.phone_e164}</p>
+                                    </div>
+                                </div>
+                                <button
+                                    onClick={() => setQrModalOpen(false)}
+                                    className="text-slate-400 hover:text-slate-600 p-1 rounded-lg hover:bg-slate-100 transition"
+                                >
+                                    <X className="w-5 h-5" />
+                                </button>
+                            </div>
+
+                            {/* Content based on status */}
+                            <div className="space-y-4 text-center">
+                                {qrStatus === 'connected' ? (
+                                    <div className="py-6 space-y-4">
+                                        <div className="w-16 h-16 bg-emerald-100 text-emerald-600 rounded-full flex items-center justify-center mx-auto ring-8 ring-emerald-50">
+                                            <CheckCircle2 className="w-8 h-8" />
+                                        </div>
+                                        <div className="space-y-1">
+                                            <h4 className="font-bold text-slate-800 text-base">WhatsApp Berhasil Terhubung!</h4>
+                                            <p className="text-xs text-slate-500">
+                                                Nomor <strong className="text-slate-700 font-mono">{connectedPhone || qrChannel.phone_e164}</strong> siap melayani pelanggan secara otomatis melalui AI Sales.
+                                            </p>
+                                        </div>
+                                        <div className="p-3 bg-slate-50 rounded-xl border border-slate-100 text-xs text-slate-600 flex items-center justify-between">
+                                            <span className="flex items-center gap-1.5 font-medium">
+                                                <Smartphone className="w-4 h-4 text-emerald-600" />
+                                                Multi-Device Aktif
+                                            </span>
+                                            <span className="px-2 py-0.5 rounded-full bg-emerald-100 text-emerald-800 text-[10px] font-bold">ONLINE</span>
+                                        </div>
+                                        <div className="flex gap-2 pt-2">
+                                            <button
+                                                onClick={() => handleDisconnectBaileys(qrChannel.id)}
+                                                disabled={qrLoading}
+                                                className="flex-1 py-2.5 px-4 rounded-xl border border-rose-200 text-rose-600 hover:bg-rose-50 font-semibold text-xs transition flex items-center justify-center gap-1.5"
+                                            >
+                                                <Unlink className="w-3.5 h-3.5" />
+                                                Putuskan Tautan
+                                            </button>
+                                            <button
+                                                onClick={() => setQrModalOpen(false)}
+                                                className="flex-1 py-2.5 px-4 rounded-xl bg-slate-900 text-white hover:bg-slate-800 font-semibold text-xs transition"
+                                            >
+                                                Selesai
+                                            </button>
+                                        </div>
+                                    </div>
+                                ) : (
+                                    <>
+                                        {/* QR Display Area */}
+                                        <div className="flex flex-col items-center justify-center min-h-[240px] p-4 bg-slate-50 border border-slate-100 rounded-2xl relative">
+                                            {qrLoading && !qrDataUrl ? (
+                                                <div className="space-y-3">
+                                                    <Loader2 className="w-8 h-8 text-emerald-600 animate-spin mx-auto" />
+                                                    <p className="text-xs text-slate-500 font-medium">Menghubungkan ke Baileys service...</p>
+                                                </div>
+                                            ) : qrError ? (
+                                                <div className="space-y-3 p-2">
+                                                    <AlertTriangle className="w-8 h-8 text-amber-500 mx-auto" />
+                                                    <div className="text-xs text-rose-600 font-medium leading-relaxed">{qrError}</div>
+                                                    <p className="text-[11px] text-slate-400">Pastikan service Baileys aktif: <code className="bg-slate-200 px-1.5 py-0.5 rounded text-slate-700">npm run baileys</code></p>
+                                                    <button
+                                                        onClick={() => openQrModal(qrChannel)}
+                                                        className="px-4 py-1.5 bg-emerald-600 text-white rounded-xl text-xs font-semibold hover:bg-emerald-700 transition"
+                                                    >
+                                                        Coba Lagi
+                                                    </button>
+                                                </div>
+                                            ) : qrDataUrl ? (
+                                                <div className="space-y-3">
+                                                    <div className="p-2 bg-white rounded-2xl shadow-sm border border-slate-200 inline-block">
+                                                        <img
+                                                            src={qrDataUrl}
+                                                            alt="WhatsApp QR Code"
+                                                            className="w-56 h-56 rounded-xl object-contain"
+                                                        />
+                                                    </div>
+                                                    <div className="flex items-center justify-center gap-2 text-[11px] text-amber-700 font-medium">
+                                                        <span className="w-2 h-2 rounded-full bg-amber-500 animate-ping" />
+                                                        <span>Menunggu pemindaian dari WhatsApp di HP...</span>
+                                                    </div>
+                                                </div>
+                                            ) : (
+                                                <div className="space-y-2">
+                                                    <Loader2 className="w-6 h-6 text-slate-400 animate-spin mx-auto" />
+                                                    <p className="text-xs text-slate-400">Menyiapkan QR Code...</p>
+                                                </div>
+                                            )}
+                                        </div>
+
+                                        {/* Step-by-step Instructions */}
+                                        <div className="bg-emerald-50/60 border border-emerald-100/80 rounded-2xl p-4 text-left space-y-2 text-xs text-slate-700">
+                                            <p className="font-bold text-emerald-950 flex items-center gap-1.5">
+                                                <Smartphone className="w-4 h-4 text-emerald-600" />
+                                                Petunjuk Pemindaian WhatsApp:
+                                            </p>
+                                            <ol className="list-decimal list-inside space-y-1 text-[11px] text-slate-600 leading-relaxed">
+                                                <li>Buka aplikasi <strong>WhatsApp</strong> di smartphone Anda.</li>
+                                                <li>Ketuk menu titik tiga (⋮) di Android atau <strong>Pengaturan</strong> di iPhone.</li>
+                                                <li>Pilih <strong>Perangkat Tertaut (Linked Devices)</strong>.</li>
+                                                <li>Ketuk <strong>Tautkan Perangkat</strong> lalu arahkan kamera ke QR Code di atas.</li>
+                                            </ol>
+                                        </div>
+
+                                        <div className="flex items-center justify-between pt-1">
+                                            <button
+                                                onClick={() => openQrModal(qrChannel)}
+                                                className="text-slate-500 hover:text-slate-800 text-xs font-semibold flex items-center gap-1"
+                                            >
+                                                <RefreshCw className="w-3.5 h-3.5" />
+                                                Muat Ulang QR
+                                            </button>
+                                            <button
+                                                onClick={() => setQrModalOpen(false)}
+                                                className="px-4 py-2 bg-slate-100 hover:bg-slate-200 text-slate-700 rounded-xl text-xs font-semibold transition"
+                                            >
+                                                Tutup
+                                            </button>
+                                        </div>
+                                    </>
                                 )}
                             </div>
                         </div>

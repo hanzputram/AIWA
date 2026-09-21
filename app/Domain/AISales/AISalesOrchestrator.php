@@ -19,19 +19,22 @@ class AISalesOrchestrator
     protected NegotiationEngineService $negotiationEngine;
     protected HumanTakeoverService $takeoverService;
     protected MessagingEligibilityService $eligibilityService;
+    protected GeminiService $geminiService;
 
     public function __construct(
         ?IntentScorerService $intentScorer = null,
         ?PricingEngineService $pricingEngine = null,
         ?NegotiationEngineService $negotiationEngine = null,
         ?HumanTakeoverService $takeoverService = null,
-        ?MessagingEligibilityService $eligibilityService = null
+        ?MessagingEligibilityService $eligibilityService = null,
+        ?GeminiService $geminiService = null
     ) {
         $this->intentScorer = $intentScorer ?? new IntentScorerService();
         $this->pricingEngine = $pricingEngine ?? new PricingEngineService();
         $this->negotiationEngine = $negotiationEngine ?? new NegotiationEngineService();
         $this->takeoverService = $takeoverService ?? new HumanTakeoverService();
         $this->eligibilityService = $eligibilityService ?? new MessagingEligibilityService();
+        $this->geminiService = $geminiService ?? new GeminiService();
     }
 
     /**
@@ -158,13 +161,52 @@ class AISalesOrchestrator
             $matchedProduct = Product::where('workspace_id', $workspace->id)->first();
         }
 
-        $replyText = "";
+        $priceInfo = "";
         if ($matchedProduct) {
             $calc = $this->pricingEngine->calculateLineItem($matchedProduct, 1);
             $priceFormatted = "Rp " . number_format($calc['unit_net_price'], 0, ',', '.');
-            $replyText = "Halo! Terima kasih telah menghubungi {$channel->name}. Untuk produk {$matchedProduct->name} ({$matchedProduct->sku}), harga resmi kami adalah {$priceFormatted} / {$matchedProduct->unit}. Barang original, bergaransi resmi, dan siap dikirim. Apakah ada kebutuhan kuantitas tertentu yang ingin kami siapkan?";
-        } else {
-            $replyText = "Halo! Terima kasih telah menghubungi {$channel->name}. Kami siap membantu kebutuhan komponen listrik & sistem kelistrikan Anda. Boleh tahu tipe produk, spesifikasi, atau jumlah yang sedang dicari?";
+            $priceInfo = "Produk terkait: {$matchedProduct->name} ({$matchedProduct->sku}), Harga Resmi: {$priceFormatted} / {$matchedProduct->unit}.";
+        }
+
+        $replyText = "";
+
+        // Attempt generative reply via Google Gemini if configured
+        if ($this->geminiService->isConfigured()) {
+            $agentProfile = $channel->agentBinding?->agentProfile 
+                ?? \App\Models\AgentProfile::where('workspace_id', $workspace->id)->first();
+            $systemInstruction = ($agentProfile?->system_instructions ?? "Jawab kebutuhan teknis dan sales pelanggan secara ramah, profesional, dan akurat.")
+                . "\nNama Bisnis/Channel: {$channel->name}."
+                . ($priceInfo ? "\nInformasi Harga Produk Approved: {$priceInfo}" : "")
+                . "\nBerikan respon yang sopan, ramah, dan ringkas (1-3 kalimat) sesuai standar percakapan bisnis WhatsApp.";
+
+            $recentMessages = Message::where('conversation_id', $conversation->id)
+                ->whereIn('sender_type', ['customer', 'ai'])
+                ->orderBy('id', 'desc')
+                ->take(6)
+                ->get()
+                ->reverse()
+                ->map(fn($m) => [
+                    'role' => $m->sender_type === 'ai' ? 'ai' : 'user',
+                    'text' => $m->content
+                ])
+                ->values()
+                ->toArray();
+
+            $replyText = $this->geminiService->generateReply($systemInstruction, $recentMessages, $customerText, [
+                'model' => $agentProfile?->model_name ?? 'gemini-3.6-flash',
+                'temperature' => $agentProfile?->temperature ?? 0.3,
+            ]);
+        }
+
+        // Fallback to approved standard template if Gemini response is not available
+        if (empty($replyText)) {
+            if ($matchedProduct) {
+                $calc = $this->pricingEngine->calculateLineItem($matchedProduct, 1);
+                $priceFormatted = "Rp " . number_format($calc['unit_net_price'], 0, ',', '.');
+                $replyText = "Halo! Terima kasih telah menghubungi {$channel->name}. Untuk produk {$matchedProduct->name} ({$matchedProduct->sku}), harga resmi kami adalah {$priceFormatted} / {$matchedProduct->unit}. Barang original, bergaransi resmi, dan siap dikirim. Apakah ada kebutuhan kuantitas tertentu yang ingin kami siapkan?";
+            } else {
+                $replyText = "Halo! Terima kasih telah menghubungi {$channel->name}. Kami siap membantu kebutuhan komponen listrik & sistem kelistrikan Anda. Boleh tahu tipe produk, spesifikasi, atau jumlah yang sedang dicari?";
+            }
         }
 
         // Check dispatch fence with current epoch before sending!
@@ -186,18 +228,26 @@ class AISalesOrchestrator
                 ],
             ]);
 
-            // Dispatch to real WhatsApp Cloud API if channel is Meta
-            if ($channel->provider === 'meta' || !empty($channel->secret_reference)) {
+            // Dispatch to real WhatsApp provider (Baileys / Meta)
+            if ($channel->provider !== 'fake_sandbox') {
                 try {
-                    $metaProvider = new \App\Domain\Messaging\Providers\MetaCloudApiProvider();
-                    $res = $metaProvider->sendText($channel, $conversation->contact->phone_e164, $replyText);
+                    $provider = \App\Domain\Messaging\MessagingProviderFactory::make($channel);
+                    $metadata = [];
+                    if (!empty($conversation->contact->custom_fields['remote_jid'])) {
+                        $metadata['remote_jid'] = $conversation->contact->custom_fields['remote_jid'];
+                    }
+                    if (!empty($metadata['remote_jid']) && (str_contains($metadata['remote_jid'], '@g.us') || str_contains($metadata['remote_jid'], '@newsletter'))) {
+                        \Log::info("Skipping AI reply to group JID: " . $metadata['remote_jid']);
+                        return ['action' => 'group_ignored', 'intent_score' => $intentResult['score']];
+                    }
+                    $res = $provider->sendText($channel, $conversation->contact->phone_e164, $replyText, $metadata);
                     if (!empty($res['provider_message_id'])) {
                         $aiMessage->provider_message_id = $res['provider_message_id'];
                         $aiMessage->state = $res['status'] ?? 'sent';
                         $aiMessage->save();
                     }
                 } catch (\Throwable $e) {
-                    \Log::error('Failed to send Meta Cloud API message: ' . $e->getMessage());
+                    \Log::error('Failed to dispatch AI outbound message: ' . $e->getMessage());
                 }
             }
 

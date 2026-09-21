@@ -26,4 +26,6 @@ Homestead.json
 Homestead.yaml
 Thumbs.db
 /scratch
+baileys-service/node_modules
+storage/baileys_auth
 
